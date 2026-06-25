@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام إدارة الراجع</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Cairo',sans-serif;background:#f0f4f8;color:#1a1a2e;direction:rtl}
+:root{--blue:#1565C0;--blue2:#1976D2;--blue3:#42A5F5;--green:#2e7d32;--red:#c62828;--orange:#e65100;--grey:#546e7a}
+.app{display:flex;min-height:100vh}
+
+/* SIDEBAR */
+.sidebar{width:235px;background:linear-gradient(180deg,#0D47A1,#1565C0 60%,#1976D2);color:white;position:fixed;top:0;right:0;height:100vh;z-index:100;display:flex;flex-direction:column;box-shadow:-3px 0 15px rgba(0,0,0,0.2);overflow-y:auto}
+.sb-logo{padding:18px 16px;text-align:center;border-bottom:1px solid rgba(255,255,255,.15)}
+.sb-logo h2{font-size:1.1rem;font-weight:700}
+.sb-logo p{font-size:.7rem;opacity:.7;margin-top:2px}
+.sb-nav{flex:1;padding:8px 0}
+.nav-sec{padding:8px 16px 2px;font-size:.65rem;opacity:.6;letter-spacing:1px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:9px 18px;color:rgba(255,255,255,.85);cursor:pointer;font-size:.88rem;border-right:3px solid transparent;transition:all .2s}
+.nav-item:hover{background:rgba(255,255,255,.1);color:white}
+.nav-item.active{background:rgba(255,255,255,.15);color:white;border-right-color:#BBDEFB;font-weight:600}
+.sb-footer{padding:14px 16px;border-top:1px solid rgba(255,255,255,.15)}
+.sb-footer .uname{font-weight:600;font-size:.9rem}
+.sb-footer .urole{opacity:.7;font-size:.75rem;margin-top:2px}
+.logout-btn{margin-top:8px;width:100%;padding:7px;background:rgba(255,255,255,.15);color:white;border:1px solid rgba(255,255,255,.3);border-radius:7px;cursor:pointer;font-family:'Cairo',sans-serif;font-size:.85rem;transition:background .2s}
+.logout-btn:hover{background:rgba(255,255,255,.25)}
+
+/* MAIN */
+.main{flex:1;margin-right:235px;padding:22px}
+.page-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.page-title{font-size:1.4rem;font-weight:700;color:var(--blue)}
+.page-sub{font-size:.82rem;color:var(--grey);margin-top:2px}
+
+/* CARD */
+.card{background:white;border-radius:9px;box-shadow:0 2px 8px rgba(0,0,0,.1);padding:18px;margin-bottom:18px}
+.card-title{font-size:.95rem;font-weight:600;color:var(--blue);margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #BBDEFB}
+
+/* FORM */
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:.82rem;font-weight:500;color:var(--grey)}
+.fg input,.fg select,.fg textarea{padding:8px 11px;border:1px solid #cfd8dc;border-radius:7px;font-family:'Cairo',sans-serif;font-size:.88rem;background:white;direction:rtl;transition:border-color .2s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--blue3);box-shadow:0 0 0 3px rgba(33,150,243,.1)}
+.span2{grid-column:1/-1}
+
+/* BTN */
+.btn{padding:8px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'Cairo',sans-serif;font-size:.88rem;font-weight:500;display:inline-flex;align-items:center;gap:5px;transition:all .2s;white-space:nowrap}
+.btn-primary{background:var(--blue);color:white}.btn-primary:hover{background:#0D47A1}
+.btn-success{background:var(--green);color:white}.btn-success:hover{background:#1b5e20}
+.btn-danger{background:var(--red);color:white}.btn-danger:hover{background:#b71c1c}
+.btn-warning{background:var(--orange);color:white}.btn-warning:hover{background:#bf360c}
+.btn-secondary{background:var(--grey);color:white}.btn-secondary:hover{background:#37474f}
+.btn-outline{background:transparent;border:1px solid var(--blue);color:var(--blue)}.btn-outline:hover{background:#e3f2fd}
+.btn-sm{padding:5px 11px;font-size:.8rem}
+.btn-xs{padding:3px 8px;font-size:.75rem}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.86rem}
+thead tr{background:var(--blue);color:white}
+th{padding:10px 11px;text-align:right;font-weight:600;white-space:nowrap}
+tbody tr{border-bottom:1px solid #eceff1}
+tbody tr:hover{background:#f5f9ff}
+td{padding:8px 11px;vertical-align:middle}
+tfoot tr{background:#f5f9ff;font-weight:700}
+.td-act{display:flex;gap:5px;flex-wrap:wrap}
+
+/* BADGE */
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:.73rem;font-weight:600}
+.b-blue{background:#BBDEFB;color:#0D47A1}
+.b-green{background:#C8E6C9;color:#1b5e20}
+.b-red{background:#FFCDD2;color:#b71c1c}
+.b-orange{background:#FFE0B2;color:#e65100}
+.b-grey{background:#ECEFF1;color:#546e7a}
+
+/* ALERT */
+.alert{padding:11px 14px;border-radius:7px;margin-bottom:14px;font-size:.88rem}
+.a-info{background:#E3F2FD;color:#0D47A1;border-right:4px solid #2196F3}
+.a-success{background:#E8F5E9;color:#1b5e20;border-right:4px solid #4CAF50}
+.a-warning{background:#FFF8E1;color:#e65100;border-right:4px solid #FF9800}
+.a-danger{background:#FFEBEE;color:#c62828;border-right:4px solid #F44336}
+
+/* FILTER BAR */
+.fbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:14px;background:#f5f9ff;border-radius:8px;margin-bottom:14px;border:1px solid #BBDEFB}
+.fbar .fg{min-width:150px;margin:0}
+
+/* MODAL */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:white;border-radius:12px;padding:24px;max-width:540px;width:90%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-title{font-size:1.1rem;font-weight:700;color:var(--blue);margin-bottom:18px}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:14px;margin-bottom:20px}
+.stat-card{background:white;border-radius:9px;padding:18px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.1);border-top:4px solid var(--blue3);cursor:pointer;transition:transform .2s}
+.stat-card:hover{transform:translateY(-2px)}
+.stat-num{font-size:1.9rem;font-weight:700;color:var(--blue)}
+.stat-label{font-size:.78rem;color:var(--grey);margin-top:3px}
+
+/* LOGIN */
+.login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0D47A1,#1976D2 50%,#42A5F5)}
+.login-card{background:white;border-radius:14px;padding:42px 36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-card h1{text-align:center;color:var(--blue);font-size:1.5rem;margin-bottom:4px}
+.login-card .sub{text-align:center;color:var(--grey);font-size:.85rem;margin-bottom:28px}
+.login-err{background:#FFEBEE;color:var(--red);padding:9px;border-radius:7px;margin-bottom:14px;font-size:.87rem;text-align:center}
+.login-info{margin-top:18px;padding:11px;background:#f5f9ff;border-radius:7px;font-size:.76rem;color:var(--grey)}
+
+/* MISC */
+.info-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.info-chip{background:#e3f2fd;color:#0D47A1;padding:3px 11px;border-radius:20px;font-size:.8rem;font-weight:500}
+.empty{text-align:center;padding:40px;color:var(--grey)}
+.empty .icon{font-size:2.5rem;margin-bottom:10px}
+.gap{display:flex;gap:8px;flex-wrap:wrap}
+
+@media print{
+  .sidebar,.no-print{display:none!important}
+  .main{margin-right:0;padding:10px}
+  .card{box-shadow:none;border:1px solid #ddd;page-break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- LOGIN -->
+<div v-if="!currentUser" class="login-page">
+  <div class="login-card">
+    <h1>📦 نظام الراجع</h1>
+    <p class="sub">Returns Management System</p>
+    <div v-if="loginErr" class="login-err">{{ loginErr }}</div>
+    <div class="fg" style="margin-bottom:14px">
+      <label>اسم المستخدم</label>
+      <input v-model="loginForm.username" @keydown.enter="doLogin" placeholder="أدخل اسم المستخدم" autofocus>
+    </div>
+    <div class="fg" style="margin-bottom:16px">
+      <label>كلمة المرور</label>
+      <input type="password" v-model="loginForm.password" @keydown.enter="doLogin" placeholder="أدخل كلمة المرور">
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px" @click="doLogin">🔐 تسجيل الدخول</button>
+    <div class="login-info">
+      <strong>حسابات تجريبية:</strong><br>
+      admin / admin123 (مدير كامل)<br>
+      reception / 123456 (الاستلام)<br>
+      inventory / 123456 (الجرد)<br>
+      auditor / 123456 (المدقق)<br>
+      manager / 123456 (عرض فقط)
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div v-else class="app">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sb-logo"><h2>📦 نظام الراجع</h2><p>Returns Management System</p></div>
+    <nav class="sb-nav">
+      <div class="nav-item" :class="{active:page==='dashboard'}" @click="nav('dashboard')"><span>🏠</span> لوحة التحكم</div>
+      <template v-if="can('admin','reception','inventory')">
+        <div class="nav-sec">المراحل</div>
+        <div class="nav-item" :class="{active:page==='reception'}" @click="nav('reception')"><span>📥</span> استلام الراجع</div>
+      </template>
+      <div v-if="can('admin','inventory')" class="nav-item" :class="{active:page==='inventory'}" @click="nav('inventory')"><span>📋</span> الجرد</div>
+      <template v-if="can('admin','auditor','manager')">
+        <div class="nav-sec">التدقيق والنتائج</div>
+        <div class="nav-item" :class="{active:page==='audit'}" @click="nav('audit')"><span>🔍</span> مرحلة التدقيق</div>
+        <div class="nav-item" :class="{active:page==='working'}" @click="nav('working')"><span>✅</span> الراجع الشغال</div>
+        <div class="nav-item" :class="{active:page==='damaged'}" @click="nav('damaged')"><span>⚠️</span> الراجع التالف</div>
+        <div class="nav-item" :class="{active:page==='customer_return'}" @click="nav('customer_return')"><span>🔄</span> راجع للزبون</div>
+        <div class="nav-item" :class="{active:page==='pending'}" @click="nav('pending')"><span>⏳</span> الايتمات المعلقة</div>
+      </template>
+      <template v-if="can('admin','manager','inventory')">
+        <div class="nav-sec">الإدارة</div>
+        <div class="nav-item" :class="{active:page==='customers'}" @click="nav('customers')"><span>👥</span> الزبائن</div>
+        <div class="nav-item" :class="{active:page==='itemdb'}" @click="nav('itemdb')"><span>🗄️</span> قاعدة بيانات الايتمات</div>
+      </template>
+      <div v-if="can('admin')" class="nav-item" :class="{active:page==='admin'}" @click="nav('admin')"><span>⚙️</span> إدارة المستخدمين</div>
+    </nav>
+    <div class="sb-footer">
+      <div class="uname">👤 {{ currentUser.full_name }}</div>
+      <div class="urole">{{ roleLabel(currentUser.role) }}</div>
+      <button class="logout-btn" @click="logout">🚪 تسجيل الخروج</button>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="main">
+    <div v-if="globalMsg" :class="['alert',globalMsgType,'no-print']" style="margin-bottom:16px">{{ globalMsg }}</div>
+
+    <!-- DASHBOARD -->
+    <div v-if="page==='dashboard'">
+      <div class="page-hdr"><div><div class="page-title">🏠 لوحة التحكم</div><div class="page-sub">نظرة عامة على نظام إدارة الراجع</div></div></div>
+      <div class="stats-grid">
+        <div class="stat-card" style="border-top-color:#1565C0" @click="nav('reception')"><div style="font-size:2rem">📥</div><div class="stat-num">{{db.receptions.length}}</div><div class="stat-label">استلامات</div></div>
+        <div class="stat-card" style="border-top-color:#1976D2" @click="nav('inventory')"><div style="font-size:2rem">📋</div><div class="stat-num">{{db.inventory_items.length}}</div><div class="stat-label">عناصر الجرد</div></div>
+        <div class="stat-card" style="border-top-color:#7B1FA2" @click="nav('audit')"><div style="font-size:2rem">🔍</div><div class="stat-num">{{db.audit_items.filter(x=>x.qty_remaining>0).length}}</div><div class="stat-label">في التدقيق</div></div>
+        <div class="stat-card" style="border-top-color:#2E7D32" @click="nav('working')"><div style="font-size:2rem">✅</div><div class="stat-num">{{db.working_returns.length}}</div><div class="stat-label">الراجع الشغال</div></div>
+        <div class="stat-card" style="border-top-color:#E65100" @click="nav('damaged')"><div style="font-size:2rem">⚠️</div><div class="stat-num">{{db.damaged_returns.length}}</div><div class="stat-label">الراجع التالف</div></div>
+        <div class="stat-card" style="border-top-color:#0277BD" @click="nav('customer_return')"><div style="font-size:2rem">🔄</div><div class="stat-num">{{db.customer_returns.length}}</div><div class="stat-label">راجع للزبون</div></div>
+        <div class="stat-card" style="border-top-color:#F57F17" @click="nav('pending')"><div style="font-size:2rem">⏳</div><div class="stat-num">{{db.pending_items.length}}</div><div class="stat-label">معلقة</div></div>
+      </div>
+      <div class="card"><div class="card-title">مراحل النظام</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px">
+          <div v-for="s in [{icon:'📥',t:'المرحلة 1',s:'استلام الراجع',d:'تسجيل المرتجعات الواردة',p:'reception'},{icon:'📋',t:'المرحلة 2',s:'الجرد',d:'إجراء الجرد بالباركود',p:'inventory'},{icon:'🔍',t:'المرحلة 3',s:'التدقيق',d:'مراجعة واتخاذ القرار',p:'audit'}]" :key="s.p"
+            @click="nav(s.p)" style="padding:18px;background:#f5f9ff;border-radius:8px;cursor:pointer;border:1px solid #BBDEFB">
+            <div style="font-size:2rem">{{s.icon}}</div>
+            <div style="font-weight:700;color:var(--blue);margin-top:8px">{{s.t}}: {{s.s}}</div>
+            <div style="font-size:.83rem;color:var(--grey);margin-top:4px">{{s.d}}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGE 1: RECEPTION -->
+    <div v-if="page==='reception'">
+      <div class="page-hdr no-print">
+        <div><div class="page-title">📥 مرحلة استلام الراجع</div><div class="page-sub">المرحلة الأولى - تسجيل الاستلام</div></div>
+        <div class="gap"><button class="btn btn-secondary btn-sm" @click="exportTable('receptions')">📊 تصدير</button><button class="btn btn-outline btn-sm" @click="print()">🖨️ طباعة</button></div>
+      </div>
+      <div class="card no-print">
+        <div class="card-title">إضافة استلام جديد</div>
+        <div class="fgrid">
+          <div class="fg"><label>الزبون *</label>
+            <select v-model="r1.customer_code" @change="onR1Customer">
+              <option value="">اختر الزبون</option>
+              <option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
+            </select>
+          </div>
+          <div class="fg"><label>اسم المستلم *</label><input v-model="r1.receiver_name" placeholder="اسم المستلم"></div>
+          <div class="fg"><label>تاريخ الاستلام *</label><input type="date" v-model="r1.receipt_date"></div>
+          <div class="fg"><label>عدد الكراتين</label><input type="number" min="0" v-model.number="r1.carton_qty"></div>
+          <div class="fg"><label>عدد القطع (علاكة)</label><input type="number" min="0" v-model.number="r1.piece_qty"></div>
+        </div>
+        <div class="gap" style="margin-top:14px">
+          <button class="btn btn-primary" @click="addReception">💾 حفظ وتوليد التسلسل</button>
+          <button v-if="lastReception" class="btn btn-secondary" @click="printLabel(lastReception)">🖨️ طباعة الملصق</button>
+        </div>
+        <div v-if="lastReception" class="alert a-success" style="margin-top:12px">✅ تسلسل القائمة: <strong>{{ lastReception.list_sequence }}</strong> - {{ lastReception.customer_name }}</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title no-print">سجلات الاستلام</div>
+        <div class="fbar no-print">
+          <div class="fg"><label>الزبون</label><select v-model="r1f.customer_code"><option value="">الكل</option><option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}}</option></select></div>
+          <div class="fg"><label>من تاريخ</label><input type="date" v-model="r1f.date_from"></div>
+          <div class="fg"><label>إلى تاريخ</label><input type="date" v-model="r1f.date_to"></div>
+        </div>
+        <div v-if="filteredReceptions.length===0" class="empty"><div class="icon">📭</div><p>لا توجد سجلات</p></div>
+        <div v-else class="tbl-wrap">
+          <table>
+            <thead><tr><th>تسلسل القائمة</th><th>الزبون</th><th>الرمز</th><th>المستلم</th><th>تاريخ الاستلام</th><th>كراتين</th><th>قطع</th><th class="no-print">طباعة</th></tr></thead>
+            <tbody>
+              <tr v-for="r in filteredReceptions" :key="r.id">
+                <td><span class="badge b-blue">{{r.list_sequence}}</span></td>
+                <td>{{r.customer_name}}</td><td>{{r.customer_code}}</td><td>{{r.receiver_name}}</td>
+                <td>{{r.receipt_date}}</td><td>{{r.carton_qty}}</td><td>{{r.piece_qty}}</td>
+                <td class="no-print"><button class="btn btn-outline btn-xs" @click="printLabel(r)">🖨️</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGE 2: INVENTORY -->
+    <div v-if="page==='inventory'">
+      <div class="page-hdr no-print">
+        <div><div class="page-title">📋 مرحلة الجرد</div><div class="page-sub">المرحلة الثانية - إدخال العناصر</div></div>
+        <div class="gap">
+          <button class="btn btn-secondary btn-sm" @click="exportTable('inventory_items')">📊 تصدير</button>
+          <button class="btn btn-outline btn-sm" @click="print()">🖨️ طباعة</button>
+          <button v-if="invPendingItems.length>0" class="btn btn-success" @click="sendToAudit">▶️ إرسال للتدقيق ({{invPendingItems.length}})</button>
+        </div>
+      </div>
+      <div class="card no-print">
+        <div class="card-title">اختيار الزبون والتسلسل</div>
+        <div class="fgrid">
+          <div class="fg"><label>الزبون *</label>
+            <select v-model="inv.customer_code" @change="onInvCustomer">
+              <option value="">اختر الزبون</option>
+              <option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
+            </select>
+          </div>
+          <div class="fg"><label>تسلسل القائمة *</label>
+            <select v-model="inv.list_sequence">
+              <option value="">اختر التسلسل</option>
+              <option v-for="s in invSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}} - {{s.receipt_date}}</option>
+            </select>
+          </div>
+          <div class="fg"><label>اسم مسؤول الجرد</label><input v-model="inv.inspector" placeholder="اسم المسؤول"></div>
+        </div>
+        <div v-if="invCustomer && inv.list_sequence" class="info-row" style="margin-top:10px">
+          <span class="info-chip">{{invCustomer.name}}</span>
+          <span class="info-chip">السعر: {{invCustomer.default_price}}</span>
+          <span class="info-chip">{{inv.list_sequence}}</span>
+        </div>
+      </div>
+
+      <div v-if="inv.list_sequence" class="card no-print">
+        <div class="card-title">إضافة عنصر (باركود)</div>
+        <div class="fgrid">
+          <div class="fg">
+            <label>باركود (امسح أو أدخل يدوياً)</label>
+            <input v-model="invItem.barcode" @keyup.enter="addInvItemByBarcode" @input="onBarcodeInput" placeholder="امسح أو اكتب الباركود ثم Enter..." ref="barcodeInput">
+            <span v-if="barcodeMatch" style="font-size:.75rem;color:var(--green);margin-top:2px">✅ موجود في قاعدة البيانات: {{barcodeMatch}}</span>
+            <span v-if="invItem.barcode && !barcodeMatch && db.item_database.length>0" style="font-size:.75rem;color:var(--orange);margin-top:2px">⚠️ غير موجود في قاعدة البيانات</span>
+          </div>
+          <div class="fg"><label>اسم العنصر *</label><input v-model="invItem.item_name" placeholder="يُملأ تلقائياً من التفاصيل أو أدخل يدوياً"></div>
+          <div class="fg"><label>الكمية *</label><input type="number" min="1" v-model.number="invItem.qty"></div>
+          <div class="fg"><label>ملاحظة</label><input v-model="invItem.note" placeholder="ملاحظة اختيارية"></div>
+        </div>
+        <div class="gap" style="margin-top:12px">
+          <button class="btn btn-primary" @click="addInvItem">➕ إضافة</button>
+          <span style="font-size:.8rem;color:var(--grey);align-self:center">أو اضغط Enter بعد إدخال الباركود</span>
+        </div>
+      </div>
+
+      <div v-if="invItems.length>0" class="card">
+        <div class="card-title">عناصر الجرد ({{invItems.length}})</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>المتبقية</th><th>الباركود</th><th>تاريخ الجرد</th><th>ملاحظة</th><th>الحالة</th><th class="no-print">إجراءات</th></tr></thead>
+            <tbody>
+              <tr v-for="(item,i) in invItems" :key="item.id">
+                <td>{{i+1}}</td>
+                <td><template v-if="editInvId===item.id"><input v-model="editInvForm.item_name" style="width:100%"></template><strong v-else>{{item.item_name}}</strong></td>
+                <td><template v-if="editInvId===item.id"><input type="number" v-model.number="editInvForm.qty" style="width:70px"></template><span v-else>{{item.qty}}</span></td>
+                <td>{{item.qty_remaining}}</td>
+                <td>{{item.barcode||'-'}}</td>
+                <td>{{item.count_date}}</td>
+                <td><template v-if="editInvId===item.id"><input v-model="editInvForm.note" style="width:100%"></template><span v-else>{{item.note||'-'}}</span></td>
+                <td><span :class="['badge', item.status==='pending_audit'?'b-green':'b-blue']">{{item.status==='pending_audit'?'أُرسل للتدقيق':'بانتظار الإرسال'}}</span></td>
+                <td class="no-print">
+                  <div class="td-act">
+                    <template v-if="editInvId===item.id">
+                      <button class="btn btn-success btn-xs" @click="saveInvEdit(item)">💾</button>
+                      <button class="btn btn-secondary btn-xs" @click="editInvId=null">✖</button>
+                    </template>
+                    <template v-else-if="item.status==='pending_send'">
+                      <button class="btn btn-outline btn-xs" @click="startInvEdit(item)">✏️</button>
+                      <button class="btn btn-danger btn-xs" @click="delInvItem(item.id)">🗑️</button>
+                    </template>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAGE 3: AUDIT -->
+    <div v-if="page==='audit'">
+      <div class="page-hdr no-print">
+        <div><div class="page-title">🔍 مرحلة التدقيق</div><div class="page-sub">المرحلة الثالثة - اتخاذ القرار</div></div>
+      </div>
+      <div class="card no-print">
+        <div class="card-title">اختيار الزبون والتسلسل</div>
+        <div class="fgrid">
+          <div class="fg"><label>الزبون</label>
+            <select v-model="aud.customer_code" @change="onAudCustomer">
+              <option value="">اختر الزبون</option>
+              <option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
+            </select>
+          </div>
+          <div class="fg"><label>تسلسل القائمة</label>
+            <select v-model="aud.list_sequence">
+              <option value="">الكل</option>
+              <option v-for="s in audSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="auditItems.length===0 && (aud.customer_code||aud.list_sequence)" class="empty"><div class="icon">✅</div><p>لا توجد عناصر بانتظار التدقيق</p></div>
+
+      <div v-if="auditItems.length>0" class="card">
+        <div class="card-title">عناصر التدقيق ({{auditItems.length}})</div>
+        <div class="alert a-info">ملاحظة: يمكن تقسيم الكمية - أدخل كمية جزئية وستبقى الباقية في التدقيق</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>#</th><th>اسم العنصر</th><th>الأصلية</th><th>المتبقية</th><th>تاريخ الاستلام</th><th>تاريخ الجرد</th><th>تسلسل القائمة</th><th>نوع المشكلة</th><th>ملاحظة</th><th>إجراء</th></tr></thead>
+            <tbody>
+              <tr v-for="(item,i) in auditItems" :key="item.id">
+                <td>{{i+1}}</td>
+                <td><strong>{{item.item_name}}</strong></td>
+                <td>{{item.qty_original}}</td>
+                <td><strong style="color:var(--blue)">{{item.qty_remaining}}</strong></td>
+                <td>{{item.receipt_date||'-'}}</td>
+                <td>{{item.count_date||'-'}}</td>
+                <td><span class="badge b-blue">{{item.list_sequence}}</span></td>
+                <td>
+                  <select v-model="item.selected_problem" @change="onProblemSelect(item)" style="min-width:210px;font-size:.8rem">
+                    <option value="">-- اختر نوع المشكلة --</option>
+                    <option v-for="pt in PROBLEM_TYPES" :key="pt.value" :value="pt.value">{{pt.label}}</option>
+                  </select>
+                  <div v-if="item.selected_problem" style="margin-top:3px">
+                    <span :class="['badge', getPTColor(item.selected_problem)]" style="font-size:.7rem">
+                      {{ getPTInfo(item.selected_problem)?.auto ? '↠ تلقائي: '+getDestLabel(getPTInfo(item.selected_problem).dest) : 'يتطلب اختيار الوجهة' }}
+                    </span>
+                  </div>
+                </td>
+                <td><input v-model="item.audit_note" placeholder="ملاحظة" style="width:100px;font-size:.8rem;padding:3px 6px;border:1px solid #cfd8dc;border-radius:5px"></td>
+                <td>
+                  <div class="td-act">
+                    <button v-if="item.selected_problem && !getPTInfo(item.selected_problem)?.auto" class="btn btn-primary btn-xs" @click="openTransfer(item)">نقل ➜</button>
+                    <span v-if="item.selected_problem && getPTInfo(item.selected_problem)?.auto" style="color:var(--green);font-size:.8rem">تلقائي ✓</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Transfer Modal -->
+      <div v-if="transferItem" class="modal-ov" @click.self="transferItem=null">
+        <div class="modal">
+          <div class="modal-title">نقل: {{ transferItem.item_name }}</div>
+          <div class="alert a-info">الكمية المتبقية: <strong>{{transferItem.qty_remaining}}</strong></div>
+          <div class="fgrid">
+            <div class="fg"><label>الكمية للنقل *</label><input type="number" min="1" :max="transferItem.qty_remaining" v-model.number="tf.qty"></div>
+            <div class="fg"><label>الوجهة *</label>
+              <select v-model="tf.destination">
+                <option value="">-- اختر الوجهة --</option>
+                <option v-for="d in getPTInfo(transferItem.selected_problem)?.dests||[]" :key="d" :value="d">{{getDestLabel(d)}}</option>
+              </select>
+            </div>
+            <div v-if="tf.destination==='working'||tf.destination==='damaged'" class="fg"><label>السعر</label><input type="number" v-model.number="tf.price"></div>
+            <div v-if="tf.destination==='damaged'" class="fg"><label>نوع التعويض</label>
+              <select v-model="tf.compensation_type"><option value="full">تعويض كامل</option><option value="half">تعويض نصفي</option></select>
+            </div>
+            <div class="fg span2"><label>ملاحظة</label><textarea rows="2" v-model="tf.note" style="resize:vertical"></textarea></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="transferItem=null">إلغاء</button>
+            <button class="btn btn-primary" @click="doTransfer">✅ تأكيد النقل</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORKING RETURNS -->
+    <div v-if="page==='working'">
+      <div class="page-hdr no-print">
+        <div><div class="page-title">✅ الراجع الشغال</div><div class="page-sub">العناصر المقبولة - تُخصم من الزبون وتُضاف للمخزون</div></div>
+        <div class="gap"><button class="btn btn-secondary btn-sm" @click="exportTable('working_returns')">📊 تصدير</button><button class="btn btn-outline btn-sm" @click="print()">🖨️ طباعة</button></div>
+      </div>
+      <div class="card no-print"><div class="fbar" style="padding:0;background:none;border:none">
+        <div class="fg"><label>الزبون</label><select v-model="wf.customer_code" @change="onWFCustomer"><option value="">الكل</option><option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}}</option></select></div>
+        <div class="fg"><label>التسلسل</label><select v-model="wf.list_sequence"><option value="">الكل</option><option v-for="s in wfSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}}</option></select></div>
+        <div class="fg"><label>من تاريخ</label><input type="date" v-model="wf.date_from"></div>
+        <div class="fg"><label>إلى تاريخ</label><input type="date" v-model="wf.date_to"></div>
+      </div></div>
+      <div v-if="filteredWorking.length>0" class="info-row">
+        <span class="info-chip">العناصر: {{filteredWorking.length}}</span>
+        <span class="info-chip">الكمية: {{filteredWorking.reduce((s,i)=>s+i.qty,0)}}</span>
+        <span class="info-chip">القيمة: {{filteredWorking.reduce((s,i)=>s+i.qty*i.price,0).toFixed(2)}}</span>
+      </div>
+      <div class="card">
+        <div class="card-title">قائمة الراجع الشغال</div>
+        <div class="alert a-info">الايتم الذي ينزل هنا ينزل من حساب الزبون والكمية تضاف إلى قاعدة البيانات</div>
+        <div v-if="filteredWorking.length===0" class="empty"><div class="icon">✅</div><p>لا توجد عناصر</p></div>
+        <div v-else class="tbl-wrap"><table>
+          <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>السعر</th><th>القيمة</th><th>الزبون</th><th>تسلسل القائمة</th><th>المفتش</th><th>ملاحظة</th><th class="no-print">إجراءات</th></tr></thead>
+          <tbody>
+            <tr v-for="(item,i) in filteredWorking" :key="item.id">
+              <td>{{i+1}}</td>
+              <td><strong>{{item.item_name}}</strong></td>
+              <td>{{item.qty}}</td>
+              <td><template v-if="editWId===item.id"><input type="number" v-model.number="editWForm.price" style="width:80px"></template><span v-else>{{item.price}}</span></td>
+              <td>{{(item.qty*(editWId===item.id?editWForm.price:item.price)).toFixed(2)}}</td>
+              <td>{{item.customer_name}}<br><small style="color:var(--grey)">{{item.customer_code}}</small></td>
+              <td><span class="badge b-blue">{{item.list_sequence}}</span></td>
+              <td>{{item.inspector_name}}</td>
+              <td><template v-if="editWId===item.id"><input v-model="editWForm.note" style="width:100%"></template><span v-else>{{item.note||'-'}}</span></td>
+              <td class="no-print"><div class="td-act">
+                <template v-if="editWId===item.id"><button class="btn btn-success btn-xs" @click="saveWEdit(item)">💾</button><button class="btn btn-secondary btn-xs" @click="editWId=null">✖</button></template>
+                <template v-else><button class="btn btn-outline btn-xs" @click="startWEdit(item)">✏️</button><button class="btn btn-warning btn-xs" @click="restoreItem('working',item)" title="إعادة للتدقيق">↩️</button></template>
+              </div></td>
+            </tr>
+          </tbody>
+          <tfoot><tr><td colspan="2">المجموع</td><td>{{filteredWorking.reduce((s,i)=>s+i.qty,0)}}</td><td></td><td>{{filteredWorking.reduce((s,i)=>s+i.qty*i.price,0).toFixed(2)}}</td><td colspan="5"></td></tr></tfoot>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- DAMAGED RETURNS -->
+    <div v-if="page==='damaged'">
+      <div class="page-hdr no-print">
+        <div><div class="page-title">⚠️ الراجع التالف</div><div class="page-sub">تُخصم من حساب الزبون ولا تُضاف للمخزون</div></div>
+        <div class="gap"><button class="btn btn-secondary btn-sm" @click="exportTable('damaged_returns')">📊 تصدير</button><button class="btn btn-outline btn-sm" @click="print()">🖨️ طباعة</button></div>
+      </div>
+      <div class="card no-print"><div class="fbar" style="padding:0;background:none;border:none">
+        <div class="fg"><label>الزبون</label><select v-model="dmf.customer_code" @change="onDMFCustomer"><option value="">الكل</option><option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}}</option></select></div>
+        <div class="fg"><label>التسلسل</label><select v-model="dmf.list_sequence"><option value="">الكل</option><option v-for="s in dmfSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}}</option></select></div>
+        <div class="fg"><label>من تاريخ</label><input type="date" v-model="dmf.date_from"></div>
+        <div class="fg"><label>إلى تاريخ</label><input type="date" v-model="dmf.date_to"></div>
+      </div></div>
+      <div v-if="filteredDamaged.length>0" class="info-row">
+        <span class="info-chip">العناصر: {{filteredDamaged.length}}</span>
+        <span class="info-chip">قيمة التعويض: {{filteredDamaged.reduce((s,i)=>s+i.qty*(i.compensation_type==='half'?i.price/2:i.price),0).toFixed(2)}}</span>
+      </div>
+      <div class="card">
+        <div class="card-title">قائمة الراجع التالف</div>
+        <div class="alert a-warning">الايتم الذي ينزل هنا ينزل من حساب الزبون ولا تضاف الكمية إلى قاعدة البيانات</div>
+        <div v-if="filteredDamaged.length===0" class="empty"><div class="icon">⚠️</div><p>لا توجد عناصر</p></div>
+        <div v-else class="tbl-wrap"><table>
+          <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>السعر</th><th>التعويض</th><th>قيمة التعويض</th><th>الزبون</th><th>تسلسل القائمة</th><th>المفتش</th><th>ملاحظة</th><th class="no-print">إجراءات</th></tr></thead>
+          <tbody>
+            <tr v-for="(item,i) in filteredDamaged" :key="item.id">
+              <td>{{i+1}}</td><td><strong>{{item.item_name}}</strong></td><td>{{item.qty}}</td>
+              <td><template v-if="editDId===item.id"><input type="number" v-model.number="editDForm.price" style="width:80px"></template><span v-else>{{item.price}}</span></td>
+              <td><template v-if="editDId===item.id"><select v-model="editDForm.compensation_type"><option value="full">كامل</option><option value="half">نصفي</option></select></template>
+                <span v-else :class="['badge',item.compensation_type==='full'?'b-green':'b-orange']">{{item.compensation_type==='full'?'كامل':'نصفي'}}</span></td>
+              <td>{{(item.qty*(item.compensation_type==='half'?item.price/2:item.price)).toFixed(2)}}</td>
+              <td>{{item.customer_name}}<br><small style="color:var(--grey)">{{item.customer_code}}</small></td>
+              <td><span class="badge b-blue">{{item.list_sequence}}</span></td>
+              <td>{{item.inspector_name}}</td>
+              <td><template v-if="editDId===item.id"><input v-model="editDForm.note" style="width:100%"></template><span v-else>{{item.note||'-'}}</span></td>
+              <td class="no-print"><div class="td-act">
+                <template v-if="editDId===item.id"><button class="btn btn-success btn-xs" @click="saveDEdit(item)">💾</button><button class="btn btn-secondary btn-xs" @click="editDId=null">✖</button></template>
+                <template v-else><button class="btn btn-outline btn-xs" @click="startDEdit(item)">✏️</button><button class="btn btn-warning btn-xs" @click="restoreItem('damaged',item)" title="إعادة للتدقيق">↩️</button></template>
+              </div></td>
+            </tr>
+          </tbody>
+          <tfoot><tr><td colspan="5">المجموع</td><td>{{filteredDamaged.reduce((s,i)=>s+i.qty*(i.compensation_type==='half'?i.price/2:i.price),0).toFixed(2)}}</td><td colspan="5"></td></tr></tfoot>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- CUSTOMER RETURNS -->
+    <div v-if="page==='customer_return'">
+      <div class="page-hdr no-print">
+        <div><div class="page-title">🔄 الراجع للزبون بعد الفحص</div><div class="page-sub">مُعاد للزبون بدون تعويض</div></div>
+        <div class="gap"><button class="btn btn-secondary btn-sm" @click="exportTable('customer_returns')">📊 تصدير</button><button class="btn btn-outline btn-sm" @click="print()">🖨️ طباعة</button></div>
+      </div>
+      <div class="card no-print"><div class="fbar" style="padding:0;background:none;border:none">
+        <div class="fg"><label>الزبون</label><select v-model="crf.customer_code" @change="onCRFCustomer"><option value="">الكل</option><option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}}</option></select></div>
+        <div class="fg"><label>التسلسل</label><select v-model="crf.list_sequence"><option value="">الكل</option><option v-for="s in crfSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}}</option></select></div>
+        <div class="fg"><label>من تاريخ</label><input type="date" v-model="crf.date_from"></div>
+        <div class="fg"><label>إلى تاريخ</label><input type="date" v-model="crf.date_to"></div>
+      </div></div>
+      <div class="card">
+        <div class="card-title">قائمة الراجع للزبون بعد الفحص</div>
+        <div v-if="filteredCR.length===0" class="empty"><div class="icon">🔄</div><p>لا توجد عناصر</p></div>
+        <div v-else class="tbl-wrap"><table>
+          <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>الزبون</th><th>تسلسل القائمة</th><th>المفتش</th><th>التاريخ</th><th>ملاحظة</th><th class="no-print">إجراءات</th></tr></thead>
+          <tbody>
+            <tr v-for="(item,i) in filteredCR" :key="item.id">
+              <td>{{i+1}}</td><td><strong>{{item.item_name}}</strong></td><td>{{item.qty}}</td>
+              <td>{{item.customer_name}}<br><small style="color:var(--grey)">{{item.customer_code}}</small></td>
+              <td><span class="badge b-blue">{{item.list_sequence}}</span></td>
+              <td>{{item.inspector_name}}</td><td>{{item.added_date}}</td><td>{{item.note||'-'}}</td>
+              <td class="no-print"><button class="btn btn-warning btn-xs" @click="restoreItem('customer_return',item)">↩️ إعادة</button></td>
+            </tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- PENDING ITEMS -->
+    <div v-if="page==='pending'">
+      <div class="page-hdr no-print">
+        <div><div class="page-title">⏳ الايتمات المعلقة</div><div class="page-sub">تُخزن بشكل تراكمي بانتظار القرار</div></div>
+        <div class="gap"><button class="btn btn-secondary btn-sm" @click="exportTable('pending_items')">📊 تصدير</button><button class="btn btn-outline btn-sm" @click="print()">🖨️ طباعة</button></div>
+      </div>
+      <div class="card no-print"><div class="fbar" style="padding:0;background:none;border:none">
+        <div class="fg"><label>الزبون</label><select v-model="pf.customer_code" @change="onPFCustomer"><option value="">الكل</option><option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}}</option></select></div>
+        <div class="fg"><label>التسلسل</label><select v-model="pf.list_sequence"><option value="">الكل</option><option v-for="s in pfSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}}</option></select></div>
+        <div class="fg"><label>من تاريخ</label><input type="date" v-model="pf.date_from"></div>
+        <div class="fg"><label>إلى تاريخ</label><input type="date" v-model="pf.date_to"></div>
+      </div></div>
+      <div class="card">
+        <div class="card-title">قائمة الايتمات المعلقة</div>
+        <div class="alert a-warning">تُخزن جميع الايتمات المعلقة بشكل تراكمي ويمكن تحويلها إلى أي واجهة</div>
+        <div v-if="filteredPending.length===0" class="empty"><div class="icon">⏳</div><p>لا توجد عناصر معلقة</p></div>
+        <div v-else class="tbl-wrap"><table>
+          <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>الزبون</th><th>تسلسل القائمة</th><th>المفتش</th><th>التاريخ</th><th>ملاحظة</th><th class="no-print">تحويل إلى</th></tr></thead>
+          <tbody>
+            <tr v-for="(item,i) in filteredPending" :key="item.id">
+              <td>{{i+1}}</td><td><strong>{{item.item_name}}</strong></td><td>{{item.qty}}</td>
+              <td>{{item.customer_name}}<br><small style="color:var(--grey)">{{item.customer_code}}</small></td>
+              <td><span class="badge b-orange">{{item.list_sequence}}</span></td>
+              <td>{{item.inspector_name}}</td><td>{{item.added_date}}</td><td>{{item.note||'-'}}</td>
+              <td class="no-print"><button class="btn btn-primary btn-xs" @click="openPendingTransfer(item)">نقل ➜</button></td>
+            </tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <!-- Pending Transfer Modal -->
+      <div v-if="pendingTransferItem" class="modal-ov" @click.self="pendingTransferItem=null">
+        <div class="modal">
+          <div class="modal-title">تحويل: {{ pendingTransferItem.item_name }}</div>
+          <div class="fgrid">
+            <div class="fg span2"><label>الوجهة *</label>
+              <select v-model="ptf.destination">
+                <option value="">-- اختر الوجهة --</option>
+                <option value="working">الراجع الشغال</option>
+                <option value="damaged">الراجع التالف</option>
+                <option value="customer_return">الراجع للزبون بعد الفحص</option>
+              </select>
+            </div>
+            <div v-if="ptf.destination==='working'||ptf.destination==='damaged'" class="fg"><label>السعر</label><input type="number" v-model.number="ptf.price"></div>
+            <div v-if="ptf.destination==='damaged'" class="fg"><label>نوع التعويض</label><select v-model="ptf.compensation_type"><option value="full">كامل</option><option value="half">نصفي</option></select></div>
+            <div class="fg span2"><label>ملاحظة</label><textarea rows="2" v-model="ptf.note" style="resize:vertical"></textarea></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" @click="pendingTransferItem=null">إلغاء</button>
+            <button class="btn btn-primary" @click="doPendingTransfer">✅ تأكيد التحويل</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CUSTOMERS -->
+    <div v-if="page==='customers'">
+      <div class="page-hdr">
+        <div><div class="page-title">👥 إدارة الزبائن</div><div class="page-sub">إجمالي: {{db.customers.length}} زبون</div></div>
+        <div class="gap">
+          <button class="btn btn-success" @click="$refs.xlsxInput.click()">📂 استيراد من Excel</button>
+          <input ref="xlsxInput" type="file" accept=".xlsx,.xls" style="display:none" @change="importCustomers">
+          <button class="btn btn-secondary btn-sm" @click="exportTable('customers')">📊 تصدير</button>
+        </div>
+      </div>
+
+      <!-- Import Result Modal -->
+      <div v-if="importResult" class="modal-ov" @click.self="importResult=null">
+        <div class="modal">
+          <div class="modal-title">📂 نتيجة الاستيراد</div>
+          <div class="alert a-success" v-if="importResult.added>0">✅ تمت إضافة <strong>{{importResult.added}}</strong> زبون جديد</div>
+          <div class="alert a-warning" v-if="importResult.updated>0">🔄 تم تحديث <strong>{{importResult.updated}}</strong> زبون موجود</div>
+          <div class="alert a-info" v-if="importResult.skipped>0">⏭️ تم تجاوز <strong>{{importResult.skipped}}</strong> سجل (بدون رمز أو اسم)</div>
+          <div style="margin-top:14px;max-height:300px;overflow-y:auto">
+            <table style="width:100%;font-size:.83rem;border-collapse:collapse">
+              <thead><tr style="background:var(--blue);color:white"><th style="padding:7px 10px;text-align:right">رمز الزبون</th><th style="padding:7px 10px;text-align:right">الاسم</th><th style="padding:7px 10px;text-align:right">الحالة</th></tr></thead>
+              <tbody>
+                <tr v-for="r in importResult.rows" :key="r.code" style="border-bottom:1px solid #eee">
+                  <td style="padding:6px 10px"><span class="badge b-blue">{{r.code}}</span></td>
+                  <td style="padding:6px 10px">{{r.name}}</td>
+                  <td style="padding:6px 10px"><span :class="['badge', r.status==='added'?'b-green':r.status==='updated'?'b-orange':'b-grey']">{{r.status==='added'?'جديد':r.status==='updated'?'تم التحديث':'تجاوز'}}</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="modal-footer"><button class="btn btn-primary" @click="importResult=null">حسناً</button></div>
+        </div>
+      </div>
+
+      <div class="card no-print">
+        <div class="card-title">إضافة زبون يدوياً</div>
+        <div class="fgrid">
+          <div class="fg"><label>رمز الزبون *</label><input v-model="newCust.customer_code" placeholder="مثال: C004"></div>
+          <div class="fg"><label>اسم الزبون *</label><input v-model="newCust.name" placeholder="الاسم الكامل"></div>
+          <div class="fg"><label>السعر الافتراضي</label><input type="number" v-model.number="newCust.default_price"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:12px" @click="addCustomer">➕ إضافة</button>
+      </div>
+      <div class="card">
+        <div class="card-title">قائمة الزبائن ({{db.customers.length}})</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>#</th><th>الرمز</th><th>الاسم</th><th>السعر الافتراضي</th><th>إجراءات</th></tr></thead>
+          <tbody>
+            <tr v-for="(c,i) in db.customers" :key="c.id">
+              <td>{{i+1}}</td>
+              <td><span class="badge b-blue">{{c.customer_code}}</span></td>
+              <td><template v-if="editCustId===c.id"><input v-model="editCustForm.name" style="width:100%"></template><span v-else>{{c.name}}</span></td>
+              <td><template v-if="editCustId===c.id"><input type="number" v-model.number="editCustForm.default_price" style="width:90px"></template><span v-else>{{c.default_price}}</span></td>
+              <td><div class="td-act">
+                <template v-if="editCustId===c.id"><button class="btn btn-success btn-xs" @click="saveCustEdit(c)">💾</button><button class="btn btn-secondary btn-xs" @click="editCustId=null">✖</button></template>
+                <template v-else><button class="btn btn-outline btn-xs" @click="startCustEdit(c)">✏️</button></template>
+              </div></td>
+            </tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ITEM DATABASE -->
+    <div v-if="page==='itemdb'">
+      <div class="page-hdr">
+        <div>
+          <div class="page-title">🗄️ قاعدة بيانات الايتمات</div>
+          <div class="page-sub">{{db.item_database.length}} عنصر — تُستخدم لملء اسم الايتم تلقائياً عند مسح الباركود</div>
+        </div>
+        <div class="gap">
+          <button class="btn btn-success" @click="$refs.itemXlsxInput.click()">📂 استيراد من Excel</button>
+          <input ref="itemXlsxInput" type="file" accept=".xlsx,.xls" style="display:none" @change="importItemDatabase">
+          <button class="btn btn-secondary btn-sm" @click="exportItemDb">📊 تصدير</button>
+          <button v-if="db.item_database.length>0" class="btn btn-danger btn-sm" @click="clearItemDb">🗑️ مسح الكل</button>
+        </div>
+      </div>
+
+      <!-- Import Result Modal -->
+      <div v-if="itemImportResult" class="modal-ov" @click.self="itemImportResult=null">
+        <div class="modal">
+          <div class="modal-title">📂 نتيجة استيراد قاعدة الايتمات</div>
+          <div class="alert a-success" v-if="itemImportResult.added>0">✅ تمت إضافة <strong>{{itemImportResult.added}}</strong> عنصر جديد</div>
+          <div class="alert a-warning" v-if="itemImportResult.updated>0">🔄 تم تحديث <strong>{{itemImportResult.updated}}</strong> عنصر موجود</div>
+          <div class="alert a-info" v-if="itemImportResult.skipped>0">⏭️ تم تجاوز <strong>{{itemImportResult.skipped}}</strong> سجل (بيانات ناقصة)</div>
+          <div style="margin-top:8px;color:var(--grey);font-size:.85rem">إجمالي قاعدة البيانات: <strong>{{db.item_database.length}}</strong> عنصر</div>
+          <div class="modal-footer"><button class="btn btn-primary" @click="itemImportResult=null">حسناً</button></div>
+        </div>
+      </div>
+
+      <!-- Search bar -->
+      <div class="card">
+        <div class="fbar" style="padding:0;background:none;border:none;margin-bottom:0">
+          <div class="fg" style="flex:1;min-width:200px">
+            <label>بحث بالباركود أو اسم الايتم</label>
+            <input v-model="itemDbSearch" placeholder="اكتب للبحث...">
+          </div>
+          <div style="align-self:flex-end;color:var(--grey);font-size:.83rem;white-space:nowrap">
+            عرض {{filteredItemDb.length}} من {{db.item_database.length}}
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">قائمة الايتمات</div>
+        <div v-if="db.item_database.length===0" class="empty">
+          <div class="icon">🗄️</div>
+          <p>قاعدة البيانات فارغة</p>
+          <p style="font-size:.83rem;margin-top:6px">استورد ملف "ITEM DATA BASE.xlsx" للبدء</p>
+        </div>
+        <div v-else class="tbl-wrap">
+          <table>
+            <thead><tr><th>#</th><th>الباركود</th><th>اسم الايتم (التفاصيل)</th><th>إجراءات</th></tr></thead>
+            <tbody>
+              <tr v-for="(item,i) in filteredItemDb.slice(0,500)" :key="item.id">
+                <td>{{i+1}}</td>
+                <td>
+                  <template v-if="editItemDbId===item.id">
+                    <input v-model="editItemDbForm.barcode" style="width:100%;min-width:160px">
+                  </template>
+                  <code v-else style="background:#f0f4f8;padding:2px 8px;border-radius:4px;font-size:.82rem">{{item.barcode}}</code>
+                </td>
+                <td>
+                  <template v-if="editItemDbId===item.id">
+                    <input v-model="editItemDbForm.item_name" style="width:100%">
+                  </template>
+                  <span v-else>{{item.item_name}}</span>
+                </td>
+                <td>
+                  <div class="td-act">
+                    <template v-if="editItemDbId===item.id">
+                      <button class="btn btn-success btn-xs" @click="saveItemDbEdit(item)">💾</button>
+                      <button class="btn btn-secondary btn-xs" @click="editItemDbId=null">✖</button>
+                    </template>
+                    <template v-else>
+                      <button class="btn btn-outline btn-xs" @click="startItemDbEdit(item)">✏️</button>
+                      <button class="btn btn-danger btn-xs" @click="delItemDb(item.id)">🗑️</button>
+                    </template>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="filteredItemDb.length>500" class="alert a-info" style="margin-top:10px">
+            يعرض أول 500 نتيجة — استخدم البحث لتضييق النتائج
+          </div>
+        </div>
+      </div>
+
+      <!-- Add single item manually -->
+      <div class="card no-print">
+        <div class="card-title">إضافة عنصر يدوياً</div>
+        <div class="fgrid">
+          <div class="fg"><label>الباركود *</label><input v-model="newItemDb.barcode" placeholder="أدخل الباركود"></div>
+          <div class="fg"><label>اسم الايتم (التفاصيل) *</label><input v-model="newItemDb.item_name" placeholder="اسم المنتج"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:12px" @click="addItemDb">➕ إضافة</button>
+      </div>
+    </div>
+
+    <!-- ADMIN -->
+    <div v-if="page==='admin'">
+      <div class="page-hdr"><div><div class="page-title">⚙️ إدارة المستخدمين</div><div class="page-sub">إدارة الحسابات وصلاحيات الوصول</div></div></div>
+      <div class="card no-print">
+        <div class="card-title">إضافة مستخدم جديد</div>
+        <div class="fgrid">
+          <div class="fg"><label>اسم المستخدم *</label><input v-model="newUser.username" placeholder="username"></div>
+          <div class="fg"><label>كلمة المرور *</label><input type="password" v-model="newUser.password" placeholder="كلمة المرور"></div>
+          <div class="fg"><label>الاسم الكامل *</label><input v-model="newUser.full_name" placeholder="الاسم بالعربية"></div>
+          <div class="fg"><label>الدور *</label>
+            <select v-model="newUser.role">
+              <option v-for="r in ROLES" :key="r.value" :value="r.value">{{r.label}}</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:12px" @click="addUser">➕ إضافة مستخدم</button>
+      </div>
+      <div class="card">
+        <div class="card-title">مستخدمو النظام</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الدور</th><th>إجراءات</th></tr></thead>
+          <tbody>
+            <tr v-for="(u,i) in db.users" :key="u.id">
+              <td>{{i+1}}</td><td><strong>{{u.username}}</strong></td>
+              <td><template v-if="editUserId===u.id"><input v-model="editUserForm.full_name" style="width:100%"></template><span v-else>{{u.full_name}}</span></td>
+              <td>
+                <template v-if="editUserId===u.id"><select v-model="editUserForm.role"><option v-for="r in ROLES" :key="r.value" :value="r.value">{{r.label}}</option></select></template>
+                <span v-else :class="['badge',ROLE_COLORS[u.role]]">{{roleLabel(u.role)}}</span>
+              </td>
+              <td><div class="td-act">
+                <template v-if="editUserId===u.id">
+                  <input type="password" v-model="editUserForm.password" placeholder="كلمة مرور جديدة" style="width:130px;font-size:.8rem;padding:3px 7px;border:1px solid #cfd8dc;border-radius:5px">
+                  <button class="btn btn-success btn-xs" @click="saveUserEdit(u)">💾</button>
+                  <button class="btn btn-secondary btn-xs" @click="editUserId=null">✖</button>
+                </template>
+                <template v-else>
+                  <button class="btn btn-outline btn-xs" @click="startUserEdit(u)">✏️</button>
+                  <button v-if="u.id!==currentUser.id" class="btn btn-danger btn-xs" @click="delUser(u.id)">🗑️</button>
+                </template>
+              </div></td>
+            </tr>
+          </tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="card-title">جدول الصلاحيات</div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>الوظيفة</th><th v-for="r in ROLES" :key="r.value">{{r.label}}</th></tr></thead>
+          <tbody>
+            <tr v-for="row in permTable" :key="row[0]">
+              <td><strong>{{row[0]}}</strong></td>
+              <td v-for="(p,i) in row.slice(1)" :key="i" style="text-align:center">{{p?'✅':'❌'}}</td>
+            </tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app -->
+</div>
+
+<script>
+const { createApp, ref, computed, reactive, nextTick } = Vue;
+
+const KEY = 'rs_db';
+const TODAY = () => new Date().toISOString().slice(0,10);
+
+const PROBLEM_TYPES = [
+  {value:'warranty_working_after_inspection',label:'داخل الضمان/ شغال بعد الفحص',dest:'working',auto:true},
+  {value:'warranty_writing_error',label:'داخل الضمان/ خطا كتابة',dest:'working',auto:true},
+  {value:'warranty_high_price',label:'داخل الضمان/ سعر مرتفع',dest:'working',auto:true},
+  {value:'warranty_prep_error',label:'داخل الضمان/ خطا تجهيز و جرد',dest:'working',auto:true},
+  {value:'warranty_factory_defect',label:'داخل الضمان/ تالف او خلل مصنعي',dest:'damaged',auto:true},
+  {value:'not_ours',label:'ليست لنا',dest:'customer_return',auto:true},
+  {value:'out_warranty_working',label:'خارج الضمان/ شغال',dests:['working','customer_return','damaged'],auto:false},
+  {value:'out_warranty_broken',label:'خارج الضمان/ كسر',dests:['damaged','customer_return'],auto:false},
+  {value:'out_warranty_damaged',label:'خارج الضمان/ تالف',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'out_warranty_used',label:'خارج الضمان/ مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'out_warranty_expired',label:'خارج الضمان/ منتهي الصالحية',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'out_warranty_factory_fault',label:'خارج الضمان/ عطل مصنعي',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'return_damaged',label:'راجع تالف',dest:'damaged',auto:true},
+  {value:'pending',label:'معلق',dest:'pending',auto:true},
+];
+
+const ROLES = [
+  {value:'admin',label:'مدير النظام'},
+  {value:'reception',label:'موظف الاستلام'},
+  {value:'inventory',label:'موظف الجرد'},
+  {value:'auditor',label:'المدقق'},
+  {value:'manager',label:'المدير (عرض)'},
+];
+const ROLE_COLORS = {admin:'b-red',reception:'b-green',inventory:'b-blue',auditor:'b-orange',manager:'b-grey'};
+const DEST_LABELS = {working:'الراجع الشغال',damaged:'الراجع التالف',customer_return:'الراجع للزبون بعد الفحص',pending:'المعلق'};
+const DEST_COLORS = {working:'b-green',damaged:'b-red',customer_return:'b-blue',pending:'b-orange'};
+
+function initDB() {
+  const saved = localStorage.getItem(KEY);
+  if (saved) return JSON.parse(saved);
+  const db = {
+    users: [
+      {id:1,username:'admin',password:'admin123',full_name:'مدير النظام',role:'admin'},
+      {id:2,username:'reception',password:'123456',full_name:'موظف الاستلام',role:'reception'},
+      {id:3,username:'inventory',password:'123456',full_name:'موظف الجرد',role:'inventory'},
+      {id:4,username:'auditor',password:'123456',full_name:'المدقق',role:'auditor'},
+      {id:5,username:'manager',password:'123456',full_name:'المدير',role:'manager'},
+    ],
+    customers: [
+      {id:1,customer_code:'C001',name:'شركة الأمل للتجارة',default_price:150},
+      {id:2,customer_code:'C002',name:'مؤسسة النجاح',default_price:200},
+      {id:3,customer_code:'C003',name:'شركة البيان',default_price:175},
+    ],
+    receptions:[],inventory_items:[],audit_items:[],
+    working_returns:[],damaged_returns:[],customer_returns:[],pending_items:[],
+    counters:{users:5,customers:3,receptions:0,inventory_items:0,audit_items:0,working_returns:0,damaged_returns:0,customer_returns:0,pending_items:0}
+  };
+  localStorage.setItem(KEY, JSON.stringify(db));
+  return db;
+}
+
+function saveDB(db) { localStorage.setItem(KEY, JSON.stringify(db)); }
+function nextId(db, table) { db.counters[table] = (db.counters[table]||0)+1; return db.counters[table]; }
+
+createApp({
+  setup() {
+    const db = reactive(initDB());
+    const currentUser = ref(JSON.parse(sessionStorage.getItem('rs_user')||'null'));
+    const page = ref('dashboard');
+    const globalMsg = ref(''); const globalMsgType = ref('a-success');
+
+    function showMsg(msg, type='a-success') {
+      globalMsg.value = msg; globalMsgType.value = type;
+      setTimeout(()=>globalMsg.value='', 4000);
+    }
+    function save() { saveDB(db); }
+    function can(...roles) { return currentUser.value && roles.includes(currentUser.value.role); }
+    function nav(p) { page.value = p; }
+    function roleLabel(r) { return ROLES.find(x=>x.value===r)?.label||r; }
+    function getPTInfo(v) { return PROBLEM_TYPES.find(p=>p.value===v); }
+    function getPTColor(v) { const pt=getPTInfo(v); if(!pt) return 'b-grey'; if(pt.dest==='working') return 'b-green'; if(pt.dest==='damaged') return 'b-red'; if(pt.dest==='customer_return') return 'b-blue'; return 'b-orange'; }
+    function getDestLabel(d) { return DEST_LABELS[d]||d; }
+
+    // LOGIN
+    const loginForm = reactive({username:'',password:''});
+    const loginErr = ref('');
+    function doLogin() {
+      const u = db.users.find(x=>x.username===loginForm.username && x.password===loginForm.password);
+      if(!u){loginErr.value='اسم المستخدم أو كلمة المرور غير صحيحة';return;}
+      currentUser.value=u; sessionStorage.setItem('rs_user',JSON.stringify(u)); loginErr.value='';
+    }
+    function logout() { currentUser.value=null; sessionStorage.removeItem('rs_user'); page.value='dashboard'; }
+
+    // ─── RECEPTION ───
+    const r1 = reactive({customer_code:'',customer_name:'',receiver_name:'',receipt_date:TODAY(),carton_qty:0,piece_qty:0});
+    const r1f = reactive({customer_code:'',date_from:'',date_to:''});
+    const lastReception = ref(null);
+    function onR1Customer() { const c=db.customers.find(x=>x.customer_code===r1.customer_code); r1.customer_name=c?.name||''; }
+    function addReception() {
+      if(!r1.customer_code||!r1.receiver_name){showMsg('❌ يرجى ملء الحقول المطلوبة','a-danger');return;}
+      const dateStr=r1.receipt_date.replace(/-/g,'');
+      const count=db.receptions.filter(x=>x.list_sequence.startsWith(`LS-${dateStr}-`)).length;
+      const seq=`LS-${dateStr}-${String(count+1).padStart(4,'0')}`;
+      const rec={id:nextId(db,'receptions'),list_sequence:seq,...JSON.parse(JSON.stringify(r1)),created_at:new Date().toISOString()};
+      db.receptions.push(rec); lastReception.value=rec; save();
+      r1.carton_qty=0; r1.piece_qty=0;
+      showMsg(`✅ تم الحفظ - تسلسل القائمة: ${seq}`);
+    }
+    const filteredReceptions = computed(()=>db.receptions.filter(r=>{
+      if(r1f.customer_code&&r.customer_code!==r1f.customer_code) return false;
+      if(r1f.date_from&&r.receipt_date<r1f.date_from) return false;
+      if(r1f.date_to&&r.receipt_date>r1f.date_to) return false;
+      return true;
+    }).reverse());
+    function printLabel(r) {
+      const w=window.open('','_blank');
+      w.document.write(`<html dir="rtl"><head><title>ملصق</title><style>body{font-family:monospace;padding:20px}.lb{border:3px solid black;padding:20px;text-align:center;display:inline-block;min-width:280px}h2{font-size:1.3rem}p{margin:5px 0}.big{font-size:1.8rem;font-weight:bold;border:2px solid black;padding:8px;margin:10px 0}</style></head><body>
+      <div class="lb"><h2>📦 ملصق استلام الراجع</h2><p>الزبون: <strong>${r.customer_name}</strong></p><p>الرمز: <strong>${r.customer_code}</strong></p><div class="big">${r.list_sequence}</div><p>تاريخ الاستلام: <strong>${r.receipt_date}</strong></p><p>كراتين: ${r.carton_qty} | قطع: ${r.piece_qty}</p><p>المستلم: ${r.receiver_name}</p></div>
+      <script>window.print();window.close();<\/script></body></html>`);
+    }
+
+    // ─── INVENTORY ───
+    const inv = reactive({customer_code:'',list_sequence:'',inspector:''});
+    const invItem = reactive({item_name:'',qty:1,barcode:'',note:''});
+    const editInvId = ref(null); const editInvForm = reactive({});
+    const invSequences = computed(()=>{
+      if(!inv.customer_code) return [];
+      const seqs=[...new Set(db.receptions.filter(r=>r.customer_code===inv.customer_code).map(r=>({list_sequence:r.list_sequence,receipt_date:r.receipt_date})))];
+      return seqs;
+    });
+    const invCustomer = computed(()=>db.customers.find(c=>c.customer_code===inv.customer_code));
+    const invItems = computed(()=>db.inventory_items.filter(i=>i.list_sequence===inv.list_sequence&&i.customer_code===inv.customer_code));
+    const invPendingItems = computed(()=>invItems.value.filter(i=>i.status==='pending_send'));
+    function onInvCustomer() { inv.list_sequence=''; }
+    function addInvItem() {
+      if(!inv.list_sequence||!inv.customer_code){showMsg('❌ اختر الزبون والتسلسل','a-danger');return;}
+      if(!invItem.item_name){showMsg('❌ أدخل اسم العنصر','a-danger');return;}
+      const rec=db.receptions.find(r=>r.list_sequence===inv.list_sequence);
+      const item={id:nextId(db,'inventory_items'),list_sequence:inv.list_sequence,customer_code:inv.customer_code,customer_name:invCustomer.value?.name,item_name:invItem.item_name,qty:invItem.qty,qty_remaining:invItem.qty,barcode:invItem.barcode||null,price:invCustomer.value?.default_price||0,receipt_date:rec?.receipt_date||null,count_date:TODAY(),note:invItem.note||null,status:'pending_send'};
+      db.inventory_items.push(item); save();
+      invItem.item_name=''; invItem.barcode=''; invItem.qty=1; invItem.note='';
+      showMsg('✅ تم الإضافة');
+    }
+    const barcodeMatch = ref('');
+    function cleanBarcode(code) {
+      // strip any control chars a scanner may append (CR, LF, tab, etc.)
+      return String(code).replace(/[\r\n\t\x00-\x1F\x7F]/g, '').trim();
+    }
+    function lookupBarcode(code) {
+      const clean = cleanBarcode(code);
+      if (!clean) { barcodeMatch.value = ''; return ''; }
+      const found = db.item_database.find(x => cleanBarcode(x.barcode).toLowerCase() === clean.toLowerCase());
+      barcodeMatch.value = found ? found.item_name : '';
+      return found ? found.item_name : '';
+    }
+    function onBarcodeInput() {
+      const name = lookupBarcode(invItem.barcode);
+      if (name) invItem.item_name = name;
+      else invItem.item_name = '';   // clear stale name when barcode changes
+    }
+    function addInvItemByBarcode() {
+      // @keyup.enter: barcode is fully captured in invItem.barcode by now
+      invItem.barcode = cleanBarcode(invItem.barcode);
+      const name = lookupBarcode(invItem.barcode);
+      if (name) invItem.item_name = name;
+      addInvItem();
+      barcodeMatch.value = '';
+    }
+    function startInvEdit(item){editInvId.value=item.id;Object.assign(editInvForm,{item_name:item.item_name,qty:item.qty,note:item.note||''});}
+    function saveInvEdit(item){const i=db.inventory_items.find(x=>x.id===item.id);if(i){i.item_name=editInvForm.item_name;i.qty=editInvForm.qty;i.qty_remaining=editInvForm.qty;i.note=editInvForm.note;}editInvId.value=null;save();}
+    function delInvItem(id){const idx=db.inventory_items.findIndex(x=>x.id===id);if(idx>-1){db.inventory_items.splice(idx,1);save();}}
+    function sendToAudit(){
+      const items=invPendingItems.value;
+      if(!items.length){showMsg('❌ لا توجد عناصر','a-danger');return;}
+      items.forEach(item=>{
+        const ai={id:nextId(db,'audit_items'),inventory_item_id:item.id,list_sequence:item.list_sequence,customer_code:item.customer_code,customer_name:item.customer_name,item_name:item.item_name,qty_original:item.qty_remaining,qty_remaining:item.qty_remaining,price:item.price,receipt_date:item.receipt_date,count_date:item.count_date,audit_date:TODAY(),problem_type:null,note:null,inspector_name:inv.inspector||null,selected_problem:''};
+        db.audit_items.push(ai); item.status='pending_audit';
+      });
+      save(); showMsg(`✅ تم إرسال ${items.length} عنصر للتدقيق`);
+    }
+
+    // ─── AUDIT ───
+    const aud = reactive({customer_code:'',list_sequence:''});
+    const transferItem = ref(null);
+    const tf = reactive({qty:1,destination:'',note:'',compensation_type:'full',price:0});
+    const audSequences = computed(()=>{
+      if(!aud.customer_code) return [];
+      return [...new Set(db.audit_items.filter(a=>a.customer_code===aud.customer_code).map(a=>a.list_sequence))].map(s=>({list_sequence:s}));
+    });
+    const auditItems = computed(()=>db.audit_items.filter(a=>{
+      if(a.qty_remaining<=0) return false;
+      if(aud.customer_code&&a.customer_code!==aud.customer_code) return false;
+      if(aud.list_sequence&&a.list_sequence!==aud.list_sequence) return false;
+      return true;
+    }));
+    function onAudCustomer(){aud.list_sequence='';}
+    function onProblemSelect(item){
+      const pt=getPTInfo(item.selected_problem);
+      if(!pt) return;
+      if(pt.auto){
+        setTimeout(()=>{
+          doAutoTransfer(item,pt.dest);
+        },100);
+      }
+    }
+    function doAutoTransfer(item,dest){
+      const qty=item.qty_remaining;
+      addToDestination(item,dest,qty,item.selected_problem,item.audit_note||'','full',item.price);
+      item.qty_remaining=0;
+      save();
+      showMsg(`✅ تم نقل "${item.item_name}" إلى "${getDestLabel(dest)}"`);
+    }
+    function openTransfer(item){
+      transferItem.value=item;
+      tf.qty=item.qty_remaining; tf.destination=''; tf.note=item.audit_note||''; tf.compensation_type='full'; tf.price=item.price||0;
+    }
+    function doTransfer(){
+      const item=transferItem.value;
+      const dest=tf.destination;
+      if(!dest){showMsg('❌ اختر الوجهة','a-danger');return;}
+      if(tf.qty<1||tf.qty>item.qty_remaining){showMsg('❌ كمية غير صحيحة','a-danger');return;}
+      addToDestination(item,dest,tf.qty,item.selected_problem,tf.note,tf.compensation_type,tf.price);
+      item.qty_remaining-=tf.qty;
+      if(item.qty_remaining===0) item.status='done';
+      save(); transferItem.value=null;
+      showMsg(`✅ تم نقل ${tf.qty} وحدة إلى "${getDestLabel(dest)}"`);
+    }
+    function addToDestination(item,dest,qty,problem_type,note,compensation_type,price){
+      const base={audit_item_id:item.id,list_sequence:item.list_sequence,customer_code:item.customer_code,customer_name:item.customer_name,item_name:item.item_name,qty:qty,problem_type:problem_type,inspector_name:item.inspector_name,note:note||null,added_date:TODAY()};
+      if(dest==='working'){db.working_returns.push({id:nextId(db,'working_returns'),...base,price:price||0});}
+      else if(dest==='damaged'){db.damaged_returns.push({id:nextId(db,'damaged_returns'),...base,price:price||0,compensation_type:compensation_type||'full'});}
+      else if(dest==='customer_return'){db.customer_returns.push({id:nextId(db,'customer_returns'),...base});}
+      else if(dest==='pending'){db.pending_items.push({id:nextId(db,'pending_items'),...base});}
+    }
+    function restoreItem(source,item){
+      if(!confirm('إعادة العنصر إلى التدقيق؟')) return;
+      const ai=db.audit_items.find(a=>a.id===item.audit_item_id);
+      if(ai) ai.qty_remaining+=item.qty;
+      if(source==='working'){const idx=db.working_returns.findIndex(x=>x.id===item.id);if(idx>-1)db.working_returns.splice(idx,1);}
+      else if(source==='damaged'){const idx=db.damaged_returns.findIndex(x=>x.id===item.id);if(idx>-1)db.damaged_returns.splice(idx,1);}
+      else if(source==='customer_return'){const idx=db.customer_returns.findIndex(x=>x.id===item.id);if(idx>-1)db.customer_returns.splice(idx,1);}
+      save(); showMsg('✅ تمت إعادة العنصر للتدقيق');
+    }
+
+    // ─── WORKING RETURNS ───
+    const wf = reactive({customer_code:'',list_sequence:'',date_from:'',date_to:''});
+    const editWId = ref(null); const editWForm = reactive({});
+    const wfSequences = computed(()=>{if(!wf.customer_code)return [];return[...new Set(db.working_returns.filter(x=>x.customer_code===wf.customer_code).map(x=>x.list_sequence))].map(s=>({list_sequence:s}));});
+    const filteredWorking = computed(()=>db.working_returns.filter(w=>{
+      if(wf.customer_code&&w.customer_code!==wf.customer_code)return false;
+      if(wf.list_sequence&&w.list_sequence!==wf.list_sequence)return false;
+      if(wf.date_from&&w.added_date<wf.date_from)return false;
+      if(wf.date_to&&w.added_date>wf.date_to)return false;
+      return true;
+    }));
+    function onWFCustomer(){wf.list_sequence='';}
+    function startWEdit(item){editWId.value=item.id;Object.assign(editWForm,{price:item.price,note:item.note||''});}
+    function saveWEdit(item){const i=db.working_returns.find(x=>x.id===item.id);if(i){i.price=editWForm.price;i.note=editWForm.note;}editWId.value=null;save();}
+
+    // ─── DAMAGED RETURNS ───
+    const dmf = reactive({customer_code:'',list_sequence:'',date_from:'',date_to:''});
+    const editDId = ref(null); const editDForm = reactive({});
+    const dmfSequences = computed(()=>{if(!dmf.customer_code)return [];return[...new Set(db.damaged_returns.filter(x=>x.customer_code===dmf.customer_code).map(x=>x.list_sequence))].map(s=>({list_sequence:s}));});
+    const filteredDamaged = computed(()=>db.damaged_returns.filter(d=>{
+      if(dmf.customer_code&&d.customer_code!==dmf.customer_code)return false;
+      if(dmf.list_sequence&&d.list_sequence!==dmf.list_sequence)return false;
+      if(dmf.date_from&&d.added_date<dmf.date_from)return false;
+      if(dmf.date_to&&d.added_date>dmf.date_to)return false;
+      return true;
+    }));
+    function onDMFCustomer(){dmf.list_sequence='';}
+    function startDEdit(item){editDId.value=item.id;Object.assign(editDForm,{price:item.price,compensation_type:item.compensation_type,note:item.note||''});}
+    function saveDEdit(item){const i=db.damaged_returns.find(x=>x.id===item.id);if(i){i.price=editDForm.price;i.compensation_type=editDForm.compensation_type;i.note=editDForm.note;}editDId.value=null;save();}
+
+    // ─── CUSTOMER RETURNS ───
+    const crf = reactive({customer_code:'',list_sequence:'',date_from:'',date_to:''});
+    const crfSequences = computed(()=>{if(!crf.customer_code)return [];return[...new Set(db.customer_returns.filter(x=>x.customer_code===crf.customer_code).map(x=>x.list_sequence))].map(s=>({list_sequence:s}));});
+    const filteredCR = computed(()=>db.customer_returns.filter(r=>{
+      if(crf.customer_code&&r.customer_code!==crf.customer_code)return false;
+      if(crf.list_sequence&&r.list_sequence!==crf.list_sequence)return false;
+      if(crf.date_from&&r.added_date<crf.date_from)return false;
+      if(crf.date_to&&r.added_date>crf.date_to)return false;
+      return true;
+    }));
+    function onCRFCustomer(){crf.list_sequence='';}
+
+    // ─── PENDING ITEMS ───
+    const pf = reactive({customer_code:'',list_sequence:'',date_from:'',date_to:''});
+    const pendingTransferItem = ref(null);
+    const ptf = reactive({destination:'',price:0,compensation_type:'full',note:''});
+    const pfSequences = computed(()=>{if(!pf.customer_code)return [];return[...new Set(db.pending_items.filter(x=>x.customer_code===pf.customer_code).map(x=>x.list_sequence))].map(s=>({list_sequence:s}));});
+    const filteredPending = computed(()=>db.pending_items.filter(p=>{
+      if(pf.customer_code&&p.customer_code!==pf.customer_code)return false;
+      if(pf.list_sequence&&p.list_sequence!==pf.list_sequence)return false;
+      if(pf.date_from&&p.added_date<pf.date_from)return false;
+      if(pf.date_to&&p.added_date>pf.date_to)return false;
+      return true;
+    }));
+    function onPFCustomer(){pf.list_sequence='';}
+    function openPendingTransfer(item){pendingTransferItem.value=item;ptf.destination='';ptf.price=0;ptf.compensation_type='full';ptf.note='';}
+    function doPendingTransfer(){
+      if(!ptf.destination){showMsg('❌ اختر الوجهة','a-danger');return;}
+      const item=pendingTransferItem.value;
+      const ai=db.audit_items.find(a=>a.id===item.audit_item_id);
+      const base={audit_item_id:item.audit_item_id,list_sequence:item.list_sequence,customer_code:item.customer_code,customer_name:item.customer_name,item_name:item.item_name,qty:item.qty,problem_type:null,inspector_name:item.inspector_name,note:ptf.note||item.note,added_date:TODAY()};
+      if(ptf.destination==='working'){db.working_returns.push({id:nextId(db,'working_returns'),...base,price:ptf.price||0});}
+      else if(ptf.destination==='damaged'){db.damaged_returns.push({id:nextId(db,'damaged_returns'),...base,price:ptf.price||0,compensation_type:ptf.compensation_type||'full'});}
+      else if(ptf.destination==='customer_return'){db.customer_returns.push({id:nextId(db,'customer_returns'),...base});}
+      const idx=db.pending_items.findIndex(x=>x.id===item.id);
+      if(idx>-1) db.pending_items.splice(idx,1);
+      save(); pendingTransferItem.value=null; showMsg('✅ تم التحويل بنجاح');
+    }
+
+    // ─── CUSTOMERS ───
+    const newCust = reactive({customer_code:'',name:'',default_price:0});
+    const editCustId = ref(null); const editCustForm = reactive({});
+    function addCustomer(){
+      if(!newCust.customer_code||!newCust.name){showMsg('❌ يرجى ملء الحقول المطلوبة','a-danger');return;}
+      if(db.customers.find(c=>c.customer_code===newCust.customer_code)){showMsg('❌ الرمز موجود مسبقاً','a-danger');return;}
+      db.customers.push({id:nextId(db,'customers'),...JSON.parse(JSON.stringify(newCust))});
+      save(); newCust.customer_code=''; newCust.name=''; newCust.default_price=0; showMsg('✅ تمت إضافة الزبون');
+    }
+    function startCustEdit(c){editCustId.value=c.id;Object.assign(editCustForm,{name:c.name,default_price:c.default_price});}
+    function saveCustEdit(c){const i=db.customers.find(x=>x.id===c.id);if(i){i.name=editCustForm.name;i.default_price=editCustForm.default_price;}editCustId.value=null;save();}
+
+    // ─── IMPORT CUSTOMERS FROM EXCEL ───
+    const importResult = ref(null);
+    function importCustomers(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      event.target.value = ''; // reset so same file can be re-imported
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target.result, {type:'array'});
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+
+          if (!rows.length) { showMsg('❌ الملف فارغ أو لا يحتوي على بيانات','a-danger'); return; }
+
+          // Detect column names flexibly (case-insensitive)
+          const firstRow = rows[0];
+          const keys = Object.keys(firstRow);
+          const idKey   = keys.find(k => /customer.?id|رمز|كود|id/i.test(k)) || keys[0];
+          const nameKey = keys.find(k => /customer.?name|اسم|name/i.test(k)) || keys[1];
+
+          let added = 0, updated = 0, skipped = 0;
+          const resultRows = [];
+
+          rows.forEach(row => {
+            const code = String(row[idKey]||'').trim();
+            const name = String(row[nameKey]||'').trim();
+            if (!code || !name) { skipped++; resultRows.push({code:code||'—',name:name||'—',status:'skipped'}); return; }
+
+            const existing = db.customers.find(c => String(c.customer_code) === code);
+            if (existing) {
+              // Update name if different
+              if (existing.name !== name) { existing.name = name; updated++; resultRows.push({code,name,status:'updated'}); }
+              else { skipped++; resultRows.push({code,name,status:'skipped'}); }
+            } else {
+              db.customers.push({id:nextId(db,'customers'), customer_code:code, name:name, default_price:0});
+              added++;
+              resultRows.push({code,name,status:'added'});
+            }
+          });
+
+          save();
+          importResult.value = {added, updated, skipped, rows: resultRows};
+        } catch(err) {
+          showMsg('❌ خطأ في قراءة الملف: ' + err.message, 'a-danger');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // ─── ITEM DATABASE ───
+    if (!db.item_database) { db.item_database = []; db.counters.item_database = 0; save(); }
+    const itemDbSearch = ref('');
+    const itemImportResult = ref(null);
+    const newItemDb = reactive({barcode:'', item_name:''});
+    const editItemDbId = ref(null); const editItemDbForm = reactive({});
+
+    const filteredItemDb = computed(()=>{
+      const q = itemDbSearch.value.trim().toLowerCase();
+      if (!q) return db.item_database;
+      return db.item_database.filter(x =>
+        x.barcode.toLowerCase().includes(q) || x.item_name.toLowerCase().includes(q)
+      );
+    });
+
+    function importItemDatabase(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      event.target.value = '';
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target.result, {type:'array'});
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+          if (!rows.length) { showMsg('❌ الملف فارغ','a-danger'); return; }
+
+          const keys = Object.keys(rows[0]);
+          // Map: col1 = barcode (الباركود), col2 = item name (التفاصيل)
+          const barcodeKey = keys.find(k => /barcode|باركود|كود|bar/i.test(k)) || keys[0];
+          const nameKey    = keys.find(k => /detail|تفاصيل|name|اسم|وصف/i.test(k) && k !== barcodeKey) || keys[1];
+
+          let added = 0, updated = 0, skipped = 0;
+          rows.forEach(row => {
+            const barcode   = String(row[barcodeKey]||'').trim();
+            const item_name = String(row[nameKey]||'').trim();
+            if (!barcode) { skipped++; return; }
+            const existing = db.item_database.find(x => x.barcode.toLowerCase() === barcode.toLowerCase());
+            if (existing) {
+              if (item_name && existing.item_name !== item_name) { existing.item_name = item_name; updated++; }
+              else skipped++;
+            } else {
+              db.item_database.push({id: nextId(db,'item_database'), barcode, item_name: item_name || barcode});
+              added++;
+            }
+          });
+
+          save();
+          itemImportResult.value = {added, updated, skipped};
+          showMsg(`✅ الاستيراد اكتمل: ${added} جديد، ${updated} تحديث، ${skipped} تجاوز`);
+        } catch(err) {
+          showMsg('❌ خطأ في قراءة الملف: ' + err.message, 'a-danger');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function addItemDb() {
+      if (!newItemDb.barcode || !newItemDb.item_name) { showMsg('❌ أدخل الباركود والاسم','a-danger'); return; }
+      if (db.item_database.find(x => x.barcode.toLowerCase() === newItemDb.barcode.toLowerCase())) {
+        showMsg('❌ الباركود موجود مسبقاً','a-danger'); return;
+      }
+      db.item_database.push({id: nextId(db,'item_database'), barcode: newItemDb.barcode.trim(), item_name: newItemDb.item_name.trim()});
+      save(); newItemDb.barcode=''; newItemDb.item_name=''; showMsg('✅ تمت الإضافة');
+    }
+
+    function startItemDbEdit(item){editItemDbId.value=item.id; Object.assign(editItemDbForm,{barcode:item.barcode, item_name:item.item_name});}
+    function saveItemDbEdit(item){
+      const i=db.item_database.find(x=>x.id===item.id);
+      if(i){i.barcode=editItemDbForm.barcode.trim(); i.item_name=editItemDbForm.item_name.trim();}
+      editItemDbId.value=null; save();
+    }
+    function delItemDb(id){
+      if (!confirm('حذف هذا العنصر؟')) return;
+      const idx=db.item_database.findIndex(x=>x.id===id); if(idx>-1) db.item_database.splice(idx,1); save();
+    }
+    function clearItemDb(){
+      if (!confirm(`مسح قاعدة البيانات بالكامل (${db.item_database.length} عنصر)؟`)) return;
+      db.item_database.splice(0); db.counters.item_database=0; save(); showMsg('✅ تم مسح قاعدة البيانات');
+    }
+    function exportItemDb(){
+      if(!db.item_database.length){showMsg('❌ لا توجد بيانات','a-danger');return;}
+      const ws=XLSX.utils.json_to_sheet(db.item_database.map(x=>({الباركود:x.barcode,التفاصيل:x.item_name})));
+      const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Items');
+      XLSX.writeFile(wb,`item_database_${TODAY()}.xlsx`);
+    }
+
+    // ─── ADMIN ───
+    const newUser = reactive({username:'',password:'',full_name:'',role:'reception'});
+    const editUserId = ref(null); const editUserForm = reactive({});
+    function addUser(){
+      if(!newUser.username||!newUser.password||!newUser.full_name){showMsg('❌ يرجى ملء الحقول المطلوبة','a-danger');return;}
+      if(db.users.find(u=>u.username===newUser.username)){showMsg('❌ اسم المستخدم موجود','a-danger');return;}
+      db.users.push({id:nextId(db,'users'),...JSON.parse(JSON.stringify(newUser))});
+      save(); newUser.username=''; newUser.password=''; newUser.full_name=''; newUser.role='reception'; showMsg('✅ تمت إضافة المستخدم');
+    }
+    function startUserEdit(u){editUserId.value=u.id;Object.assign(editUserForm,{full_name:u.full_name,role:u.role,password:''});}
+    function saveUserEdit(u){
+      const i=db.users.find(x=>x.id===u.id);
+      if(i){i.full_name=editUserForm.full_name;i.role=editUserForm.role;if(editUserForm.password)i.password=editUserForm.password;}
+      editUserId.value=null;save();showMsg('✅ تم التحديث');
+      if(u.id===currentUser.value.id){currentUser.value={...i};sessionStorage.setItem('rs_user',JSON.stringify(currentUser.value));}
+    }
+    function delUser(id){if(!confirm('حذف المستخدم؟'))return;const idx=db.users.findIndex(x=>x.id===id);if(idx>-1){db.users.splice(idx,1);save();showMsg('✅ تم الحذف');}}
+
+    const permTable = [
+      ['لوحة التحكم',true,true,true,true,true],
+      ['استلام الراجع',true,true,true,false,false],
+      ['الجرد',true,false,true,false,false],
+      ['التدقيق',true,false,false,true,true],
+      ['الراجع الشغال',true,false,false,true,true],
+      ['الراجع التالف',true,false,false,true,true],
+      ['راجع للزبون',true,false,false,true,true],
+      ['المعلقة',true,false,false,true,true],
+      ['إدارة الزبائن',true,false,false,false,true],
+      ['إدارة المستخدمين',true,false,false,false,false],
+    ];
+
+    // ─── EXPORT ───
+    function exportTable(tableName){
+      const data=db[tableName]||[];
+      if(!data.length){showMsg('❌ لا توجد بيانات للتصدير','a-danger');return;}
+      const ws=XLSX.utils.json_to_sheet(data);
+      const wb=XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb,ws,tableName);
+      XLSX.writeFile(wb,`${tableName}_${TODAY()}.xlsx`);
+    }
+    function print(){window.print();}
+
+    return {
+      db,currentUser,page,globalMsg,globalMsgType,
+      loginForm,loginErr,doLogin,logout,
+      can,nav,roleLabel,PROBLEM_TYPES,ROLES,ROLE_COLORS,permTable,
+      getPTInfo,getPTColor,getDestLabel,
+      r1,r1f,lastReception,onR1Customer,addReception,filteredReceptions,printLabel,
+      inv,invItem,invSequences,invCustomer,invItems,invPendingItems,editInvId,editInvForm,
+      onInvCustomer,addInvItem,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,
+      aud,audSequences,auditItems,transferItem,tf,onAudCustomer,onProblemSelect,openTransfer,doTransfer,restoreItem,
+      wf,wfSequences,filteredWorking,editWId,editWForm,onWFCustomer,startWEdit,saveWEdit,
+      dmf,dmfSequences,filteredDamaged,editDId,editDForm,onDMFCustomer,startDEdit,saveDEdit,
+      crf,crfSequences,filteredCR,onCRFCustomer,
+      pf,pfSequences,filteredPending,pendingTransferItem,ptf,onPFCustomer,openPendingTransfer,doPendingTransfer,
+      newCust,editCustId,editCustForm,addCustomer,startCustEdit,saveCustEdit,importCustomers,importResult,
+      itemDbSearch,filteredItemDb,itemImportResult,newItemDb,editItemDbId,editItemDbForm,
+      importItemDatabase,addItemDb,startItemDbEdit,saveItemDbEdit,delItemDb,clearItemDb,exportItemDb,
+      barcodeMatch,onBarcodeInput,
+      newUser,editUserId,editUserForm,addUser,startUserEdit,saveUserEdit,delUser,
+      exportTable,print,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
