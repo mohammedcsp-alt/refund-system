@@ -41,7 +41,12 @@ body{font-family:'Cairo',sans-serif;background:#f0f4f8;color:#1a1a2e;direction:r
 
 /* FORM */
 .fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
-.fg{display:flex;flex-direction:column;gap:5px}
+.fg{display:flex;flex-direction:column;gap:5px;position:relative}
+.ac-list{position:absolute;top:100%;right:0;left:0;margin-top:2px;background:white;border:1px solid #cfd8dc;border-radius:7px;box-shadow:0 4px 14px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;z-index:50}
+.ac-item{padding:8px 11px;font-size:.85rem;cursor:pointer;border-bottom:1px solid #eceff1}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover,.ac-item.active{background:#e3f2fd}
+.ac-item small{display:block;color:var(--grey);font-size:.72rem;margin-top:1px}
 .fg label{font-size:.82rem;font-weight:500;color:var(--grey)}
 .fg input,.fg select,.fg textarea{padding:8px 11px;border:1px solid #cfd8dc;border-radius:7px;font-family:'Cairo',sans-serif;font-size:.88rem;background:white;direction:rtl;transition:border-color .2s}
 .fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--blue3);box-shadow:0 0 0 3px rgba(33,150,243,.1)}
@@ -308,9 +313,23 @@ tfoot tr{background:#f5f9ff;font-weight:700}
             <span v-if="barcodeMatch" style="font-size:.75rem;color:var(--green);margin-top:2px">✅ موجود في قاعدة البيانات: {{barcodeMatch}}</span>
             <span v-if="invItem.barcode && !barcodeMatch && db.item_database.length>0" style="font-size:.75rem;color:var(--orange);margin-top:2px">⚠️ غير موجود في قاعدة البيانات</span>
           </div>
-          <div class="fg"><label>اسم العنصر *</label><input v-model="invItem.item_name" placeholder="يُملأ تلقائياً من التفاصيل أو أدخل يدوياً"></div>
+          <div class="fg">
+            <label>اسم العنصر *</label>
+            <input v-model="invItem.item_name" @input="onItemNameInput" @focus="onItemNameInput" @blur="hideItemNameSuggestions" placeholder="يُملأ تلقائياً من الباركود أو ابحث يدوياً بالاسم" autocomplete="off">
+            <div v-if="showItemNameSuggestions && itemNameSuggestions.length" class="ac-list">
+              <div v-for="s in itemNameSuggestions" :key="s.id" class="ac-item" @mousedown.prevent="selectItemNameSuggestion(s)">
+                {{s.item_name}}<small>{{s.barcode}}</small>
+              </div>
+            </div>
+          </div>
           <div class="fg"><label>الكمية *</label><input type="number" min="1" v-model.number="invItem.qty"></div>
-          <div class="fg"><label>ملاحظة</label><input v-model="invItem.note" placeholder="ملاحظة اختيارية"></div>
+          <div class="fg"><label>ملاحظة</label>
+            <select v-model="invItem.note">
+              <option value="">-- اختر --</option>
+              <option value="OK">OK</option>
+              <option value="NO INFORMATION">NO INFORMATION</option>
+            </select>
+          </div>
         </div>
         <div class="gap" style="margin-top:12px">
           <button class="btn btn-primary" @click="addInvItem">➕ إضافة</button>
@@ -322,7 +341,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         <div class="card-title">عناصر الجرد ({{invItems.length}})</div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>المتبقية</th><th>الباركود</th><th>تاريخ الجرد</th><th>ملاحظة</th><th>الحالة</th><th class="no-print">إجراءات</th></tr></thead>
+            <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>المتبقية</th><th>الباركود</th><th>تاريخ استلام الراجع</th><th>تاريخ الجرد</th><th>ملاحظة</th><th>الحالة</th><th class="no-print">إجراءات</th></tr></thead>
             <tbody>
               <tr v-for="(item,i) in invItems" :key="item.id">
                 <td>{{i+1}}</td>
@@ -330,8 +349,15 @@ tfoot tr{background:#f5f9ff;font-weight:700}
                 <td><template v-if="editInvId===item.id"><input type="number" v-model.number="editInvForm.qty" style="width:70px"></template><span v-else>{{item.qty}}</span></td>
                 <td>{{item.qty_remaining}}</td>
                 <td>{{item.barcode||'-'}}</td>
+                <td>{{receiptDateOf(item)}}</td>
                 <td>{{item.count_date}}</td>
-                <td><template v-if="editInvId===item.id"><input v-model="editInvForm.note" style="width:100%"></template><span v-else>{{item.note||'-'}}</span></td>
+                <td><template v-if="editInvId===item.id">
+                    <select v-model="editInvForm.note" style="width:100%">
+                      <option value="">-- اختر --</option>
+                      <option value="OK">OK</option>
+                      <option value="NO INFORMATION">NO INFORMATION</option>
+                    </select>
+                  </template><span v-else>{{item.note||'-'}}</span></td>
                 <td><span :class="['badge', item.status==='pending_audit'?'b-green':'b-blue']">{{item.status==='pending_audit'?'أُرسل للتدقيق':'بانتظار الإرسال'}}</span></td>
                 <td class="no-print">
                   <div class="td-act">
@@ -970,11 +996,25 @@ createApp({
     const invItems = computed(()=>db.inventory_items.filter(i=>i.list_sequence===inv.list_sequence&&i.customer_code===inv.customer_code));
     const invPendingItems = computed(()=>invItems.value.filter(i=>i.status==='pending_send'));
     function onInvCustomer() { inv.list_sequence=''; }
+    function receiptDateOf(item) {
+      if (item.receipt_date) return item.receipt_date;
+      const rec = db.receptions.find(r=>r.list_sequence===item.list_sequence);
+      return rec?.receipt_date || '-';
+    }
     function addInvItem() {
       if(!inv.list_sequence||!inv.customer_code){showMsg('❌ اختر الزبون والتسلسل','a-danger');return;}
       if(!invItem.item_name){showMsg('❌ أدخل اسم العنصر','a-danger');return;}
+      const name=invItem.item_name.trim();
+      const note=invItem.note||null;
+      const dup=invItems.value.find(i=>i.status==='pending_send'&&i.item_name.trim().toLowerCase()===name.toLowerCase()&&(i.note||null)===note);
+      if (dup) {
+        dup.qty+=invItem.qty; dup.qty_remaining+=invItem.qty; save();
+        invItem.item_name=''; invItem.barcode=''; invItem.qty=1; invItem.note='';
+        showMsg(`✅ العنصر موجود مسبقاً - تم إضافة الكمية (الإجمالي: ${dup.qty})`);
+        return;
+      }
       const rec=db.receptions.find(r=>r.list_sequence===inv.list_sequence);
-      const item={id:nextId(db,'inventory_items'),list_sequence:inv.list_sequence,customer_code:inv.customer_code,customer_name:invCustomer.value?.name,item_name:invItem.item_name,qty:invItem.qty,qty_remaining:invItem.qty,barcode:invItem.barcode||null,price:invCustomer.value?.default_price||0,receipt_date:rec?.receipt_date||null,count_date:TODAY(),note:invItem.note||null,status:'pending_send'};
+      const item={id:nextId(db,'inventory_items'),list_sequence:inv.list_sequence,customer_code:inv.customer_code,customer_name:invCustomer.value?.name,item_name:name,qty:invItem.qty,qty_remaining:invItem.qty,barcode:invItem.barcode||null,price:invCustomer.value?.default_price||0,receipt_date:rec?.receipt_date||null,count_date:TODAY(),note:note,status:'pending_send'};
       db.inventory_items.push(item); save();
       invItem.item_name=''; invItem.barcode=''; invItem.qty=1; invItem.note='';
       showMsg('✅ تم الإضافة');
@@ -1003,6 +1043,22 @@ createApp({
       if (name) invItem.item_name = name;
       addInvItem();
       barcodeMatch.value = '';
+    }
+    const showItemNameSuggestions = ref(false);
+    const itemNameSuggestions = computed(()=>{
+      const q = invItem.item_name.trim().toLowerCase();
+      if (!q) return [];
+      return db.item_database.filter(x => x.item_name.toLowerCase().includes(q))
+        .sort((a,b) => a.item_name.localeCompare(b.item_name, 'ar'))
+        .slice(0,100);
+    });
+    function onItemNameInput() { showItemNameSuggestions.value = true; }
+    function hideItemNameSuggestions() { showItemNameSuggestions.value = false; }
+    function selectItemNameSuggestion(s) {
+      invItem.item_name = s.item_name;
+      invItem.barcode = s.barcode || '';
+      barcodeMatch.value = s.item_name;
+      showItemNameSuggestions.value = false;
     }
     function startInvEdit(item){editInvId.value=item.id;Object.assign(editInvForm,{item_name:item.item_name,qty:item.qty,note:item.note||''});}
     function saveInvEdit(item){const i=db.inventory_items.find(x=>x.id===item.id);if(i){i.item_name=editInvForm.item_name;i.qty=editInvForm.qty;i.qty_remaining=editInvForm.qty;i.note=editInvForm.note;}editInvId.value=null;save();}
@@ -1347,7 +1403,7 @@ createApp({
       getPTInfo,getPTColor,getDestLabel,
       r1,r1f,lastReception,onR1Customer,addReception,filteredReceptions,printLabel,
       inv,invItem,invSequences,invCustomer,invItems,invPendingItems,editInvId,editInvForm,
-      onInvCustomer,addInvItem,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,
+      onInvCustomer,addInvItem,receiptDateOf,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,
       aud,audSequences,auditItems,transferItem,tf,onAudCustomer,onProblemSelect,openTransfer,doTransfer,restoreItem,
       wf,wfSequences,filteredWorking,editWId,editWForm,onWFCustomer,startWEdit,saveWEdit,
       dmf,dmfSequences,filteredDamaged,editDId,editDForm,onDMFCustomer,startDEdit,saveDEdit,
@@ -1357,6 +1413,7 @@ createApp({
       itemDbSearch,filteredItemDb,itemImportResult,newItemDb,editItemDbId,editItemDbForm,
       importItemDatabase,addItemDb,startItemDbEdit,saveItemDbEdit,delItemDb,clearItemDb,exportItemDb,
       barcodeMatch,onBarcodeInput,
+      showItemNameSuggestions,itemNameSuggestions,onItemNameInput,hideItemNameSuggestions,selectItemNameSuggestion,
       newUser,editUserId,editUserForm,addUser,startUserEdit,saveUserEdit,delUser,
       exportTable,print,
     };
