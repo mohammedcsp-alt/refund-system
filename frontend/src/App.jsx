@@ -20,7 +20,7 @@ const ROLE_LABELS = {
 function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const can = (...roles) => roles.includes(user?.role);
+  const can = (...roles) => roles.some(r => user?.roles?.includes(r));
 
   return (
     <div className="sidebar">
@@ -80,7 +80,7 @@ function Sidebar() {
       </nav>
       <div className="sidebar-footer">
         <div className="user-name">👤 {user?.full_name}</div>
-        <div className="user-role">{ROLE_LABELS[user?.role]}</div>
+        <div className="user-role">{user?.roles?.map(r => ROLE_LABELS[r]).join('، ')}</div>
         <button className="logout-btn" onClick={() => { logout(); navigate('/login'); }}>
           🚪 تسجيل الخروج
         </button>
@@ -93,7 +93,7 @@ function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading"><div className="spinner"/><p>جارٍ التحميل...</p></div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (roles && !roles.includes(user.role)) return (
+  if (roles && !roles.some(r => user.roles?.includes(r))) return (
     <div className="main-content">
       <div className="alert alert-danger">ليس لديك صلاحية للوصول إلى هذه الصفحة</div>
     </div>

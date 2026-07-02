@@ -20,7 +20,7 @@ const auth = (roles = []) => (req, res, next) => {
   if (!token) return res.status(401).json({ error: 'غير مصرح' });
   try {
     const user = jwt.verify(token, JWT_SECRET);
-    if (roles.length && !roles.includes(user.role)) {
+    if (roles.length && !roles.some(r => user.roles.includes(r))) {
       return res.status(403).json({ error: 'ليس لديك صلاحية' });
     }
     req.user = user;
@@ -56,26 +56,39 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || !bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
   }
+  const roles = db.prepare('SELECT role FROM user_roles WHERE user_id = ?').all(user.id).map(r => r.role);
   const token = jwt.sign(
-    { id: user.id, username: user.username, full_name: user.full_name, role: user.role },
+    { id: user.id, username: user.username, full_name: user.full_name, roles },
     JWT_SECRET, { expiresIn: '24h' }
   );
-  res.json({ token, user: { id: user.id, username: user.username, full_name: user.full_name, role: user.role } });
+  res.json({ token, user: { id: user.id, username: user.username, full_name: user.full_name, roles } });
 });
 
 app.get('/api/auth/me', auth(), (req, res) => res.json(req.user));
 
 // ─── USER MANAGEMENT ───────────────────────────────────────────────────────────
 app.get('/api/users', auth(['admin']), (req, res) => {
-  const users = getDb().prepare('SELECT id, username, full_name, role, created_at FROM users ORDER BY id').all();
+  const db = getDb();
+  const users = db.prepare('SELECT id, username, full_name, created_at FROM users ORDER BY id').all();
+  const roleRows = db.prepare('SELECT user_id, role FROM user_roles').all();
+  users.forEach(u => { u.roles = roleRows.filter(r => r.user_id === u.id).map(r => r.role); });
+  res.json(users);
+});
+
+app.get('/api/users/list', auth(), (req, res) => {
+  const users = getDb().prepare('SELECT id, full_name FROM users ORDER BY full_name').all();
   res.json(users);
 });
 
 app.post('/api/users', auth(['admin']), (req, res) => {
-  const { username, password, full_name, role } = req.body;
+  const { username, password, full_name, roles } = req.body;
+  if (!Array.isArray(roles) || !roles.length) return res.status(400).json({ error: 'يرجى اختيار دور واحد على الأقل' });
+  const db = getDb();
   try {
     const hashed = bcrypt.hashSync(password, 10);
-    const r = getDb().prepare('INSERT INTO users (username, password, full_name, role) VALUES (?,?,?,?)').run(username, hashed, full_name, role);
+    const r = db.prepare('INSERT INTO users (username, password, full_name, role) VALUES (?,?,?,?)').run(username, hashed, full_name, roles[0]);
+    const insertRole = db.prepare('INSERT INTO user_roles (user_id, role) VALUES (?,?)');
+    roles.forEach(role => insertRole.run(r.lastInsertRowid, role));
     res.json({ id: r.lastInsertRowid });
   } catch (e) {
     res.status(400).json({ error: 'اسم المستخدم موجود مسبقاً' });
@@ -83,19 +96,25 @@ app.post('/api/users', auth(['admin']), (req, res) => {
 });
 
 app.put('/api/users/:id', auth(['admin']), (req, res) => {
-  const { full_name, role, password } = req.body;
+  const { full_name, roles, password } = req.body;
+  if (!Array.isArray(roles) || !roles.length) return res.status(400).json({ error: 'يرجى اختيار دور واحد على الأقل' });
   const db = getDb();
   if (password) {
-    db.prepare('UPDATE users SET full_name=?, role=?, password=? WHERE id=?').run(full_name, role, bcrypt.hashSync(password, 10), req.params.id);
+    db.prepare('UPDATE users SET full_name=?, role=?, password=? WHERE id=?').run(full_name, roles[0], bcrypt.hashSync(password, 10), req.params.id);
   } else {
-    db.prepare('UPDATE users SET full_name=?, role=? WHERE id=?').run(full_name, role, req.params.id);
+    db.prepare('UPDATE users SET full_name=?, role=? WHERE id=?').run(full_name, roles[0], req.params.id);
   }
+  db.prepare('DELETE FROM user_roles WHERE user_id=?').run(req.params.id);
+  const insertRole = db.prepare('INSERT INTO user_roles (user_id, role) VALUES (?,?)');
+  roles.forEach(role => insertRole.run(req.params.id, role));
   res.json({ ok: true });
 });
 
 app.delete('/api/users/:id', auth(['admin']), (req, res) => {
   if (Number(req.params.id) === req.user.id) return res.status(400).json({ error: 'لا يمكن حذف حسابك' });
-  getDb().prepare('DELETE FROM users WHERE id=?').run(req.params.id);
+  const db = getDb();
+  db.prepare('DELETE FROM user_roles WHERE user_id=?').run(req.params.id);
+  db.prepare('DELETE FROM users WHERE id=?').run(req.params.id);
   res.json({ ok: true });
 });
 
@@ -162,6 +181,16 @@ app.get('/api/inventory', auth(), (req, res) => {
   if (customer_code) { q += ' AND customer_code=?'; params.push(customer_code); }
   q += ' ORDER BY id ASC';
   res.json(getDb().prepare(q).all(...params));
+});
+
+app.get('/api/inventory/item-names', auth(), (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (!q) return res.json([]);
+  const rows = getDb().prepare(`
+    SELECT item_name, MAX(barcode) as barcode FROM inventory_items
+    WHERE item_name LIKE ? GROUP BY item_name ORDER BY item_name COLLATE NOCASE LIMIT 10
+  `).all(`%${q}%`);
+  res.json(rows);
 });
 
 app.post('/api/inventory/item', auth(['admin','inventory']), (req, res) => {
