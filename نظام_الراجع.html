@@ -337,9 +337,13 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         </div>
       </div>
 
-      <div v-if="invItems.length>0" class="card">
-        <div class="card-title">عناصر الجرد ({{invItems.length}})</div>
-        <div class="tbl-wrap">
+      <div v-if="inv.list_sequence" class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <span>عناصر الجرد ({{invItems.length}})</span>
+          <button class="btn btn-success btn-sm no-print" @click="finishInventory">🏁 FINISH</button>
+        </div>
+        <div v-if="invItems.length===0" class="empty"><div class="icon">📭</div><p>لا توجد عناصر</p></div>
+        <div v-else class="tbl-wrap">
           <table>
             <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>المتبقية</th><th>الباركود</th><th>تاريخ استلام الراجع</th><th>تاريخ الجرد</th><th>ملاحظة</th><th>الحالة</th><th class="no-print">إجراءات</th></tr></thead>
             <tbody>
@@ -866,7 +870,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
 </div>
 
 <script>
-const { createApp, ref, computed, reactive, nextTick } = Vue;
+const { createApp, ref, computed, reactive, nextTick, onMounted } = Vue;
 
 const KEY = 'rs_db';
 const TODAY = () => new Date().toISOString().slice(0,10);
@@ -926,9 +930,28 @@ function initDB() {
 function saveDB(db) { localStorage.setItem(KEY, JSON.stringify(db)); }
 function nextId(db, table) { db.counters[table] = (db.counters[table]||0)+1; return db.counters[table]; }
 
+const SYNC_URL = '/api/db';
+async function fetchServerDB(timeoutMs = 1500) {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), timeoutMs);
+    const res = await fetch(SYNC_URL, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    return await res.json(); // { data, updated_at }
+  } catch (e) { return null; } // offline / server not running / opened via file://
+}
+
+(async () => {
+const local = initDB();
+const server = await fetchServerDB();
+const seed = (server && server.data) ? server.data : local;
+let lastSyncedAt = (server && server.data) ? server.updated_at : 0;
+if (server && server.data) saveDB(seed);
+
 createApp({
   setup() {
-    const db = reactive(initDB());
+    const db = reactive(seed);
     const currentUser = ref(JSON.parse(sessionStorage.getItem('rs_user')||'null'));
     const page = ref('dashboard');
     const globalMsg = ref(''); const globalMsgType = ref('a-success');
@@ -937,7 +960,26 @@ createApp({
       globalMsg.value = msg; globalMsgType.value = type;
       setTimeout(()=>globalMsg.value='', 4000);
     }
-    function save() { saveDB(db); }
+    function save() {
+      saveDB(db);
+      fetch(SYNC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: db })
+      }).then(r=>r.ok?r.json():null)
+        .then(j=>{ if (j) lastSyncedAt = j.updated_at; })
+        .catch(()=>{});
+    }
+    onMounted(()=>{
+      setInterval(async ()=>{
+        const s = await fetchServerDB();
+        if (s && s.data && s.updated_at > lastSyncedAt) {
+          Object.assign(db, s.data);
+          saveDB(db);
+          lastSyncedAt = s.updated_at;
+        }
+      }, 5000);
+    });
     function can(...roles) { return currentUser.value && roles.includes(currentUser.value.role); }
     function nav(p) { page.value = p; }
     function roleLabel(r) { return ROLES.find(x=>x.value===r)?.label||r; }
@@ -993,7 +1035,7 @@ createApp({
       return seqs;
     });
     const invCustomer = computed(()=>db.customers.find(c=>c.customer_code===inv.customer_code));
-    const invItems = computed(()=>db.inventory_items.filter(i=>i.list_sequence===inv.list_sequence&&i.customer_code===inv.customer_code));
+    const invItems = computed(()=>db.inventory_items.filter(i=>i.list_sequence===inv.list_sequence&&i.customer_code===inv.customer_code&&i.status==='pending_send'));
     const invPendingItems = computed(()=>invItems.value.filter(i=>i.status==='pending_send'));
     function onInvCustomer() { inv.list_sequence=''; }
     function receiptDateOf(item) {
@@ -1071,6 +1113,11 @@ createApp({
         db.audit_items.push(ai); item.status='pending_audit';
       });
       save(); showMsg(`✅ تم إرسال ${items.length} عنصر للتدقيق`);
+    }
+    function finishInventory(){
+      if(!invPendingItems.value.length){showMsg('❌ لا توجد عناصر','a-danger');return;}
+      if(!window.confirm('تأكيد إنهاء الجرد وإرسال القائمة إلى مرحلة التدقيق؟')) return;
+      sendToAudit();
     }
 
     // ─── AUDIT ───
@@ -1403,7 +1450,7 @@ createApp({
       getPTInfo,getPTColor,getDestLabel,
       r1,r1f,lastReception,onR1Customer,addReception,filteredReceptions,printLabel,
       inv,invItem,invSequences,invCustomer,invItems,invPendingItems,editInvId,editInvForm,
-      onInvCustomer,addInvItem,receiptDateOf,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,
+      onInvCustomer,addInvItem,receiptDateOf,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,finishInventory,
       aud,audSequences,auditItems,transferItem,tf,onAudCustomer,onProblemSelect,openTransfer,doTransfer,restoreItem,
       wf,wfSequences,filteredWorking,editWId,editWForm,onWFCustomer,startWEdit,saveWEdit,
       dmf,dmfSequences,filteredDamaged,editDId,editDForm,onDMFCustomer,startDEdit,saveDEdit,
@@ -1419,6 +1466,8 @@ createApp({
     };
   }
 }).mount('#app');
+
+})();
 </script>
 </body>
 </html>
