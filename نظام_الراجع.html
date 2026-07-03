@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>نظام إدارة الراجع</title>
-<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<script src="lib/vue.global.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -229,7 +229,12 @@ tfoot tr{background:#f5f9ff;font-weight:700}
               <option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
             </select>
           </div>
-          <div class="fg"><label>اسم المستلم *</label><input v-model="r1.receiver_name" placeholder="اسم المستلم"></div>
+          <div class="fg"><label>اسم المستلم *</label>
+            <select v-model="r1.receiver_name">
+              <option value="">اختر المستلم</option>
+              <option v-for="u in db.users" :key="u.id" :value="u.full_name">{{u.full_name}}</option>
+            </select>
+          </div>
           <div class="fg"><label>تاريخ الاستلام *</label><input type="date" v-model="r1.receipt_date"></div>
           <div class="fg"><label>عدد الكراتين</label><input type="number" min="0" v-model.number="r1.carton_qty"></div>
           <div class="fg"><label>عدد القطع (علاكة)</label><input type="number" min="0" v-model.number="r1.piece_qty"></div>
