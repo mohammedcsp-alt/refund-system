@@ -294,7 +294,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
           <div class="fg"><label>الزبون *</label>
             <select v-model="inv.customer_code" @change="onInvCustomer">
               <option value="">اختر الزبون</option>
-              <option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
+              <option v-for="c in invCustomers" :key="c.customer_code" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
             </select>
           </div>
           <div class="fg"><label>تسلسل القائمة *</label>
@@ -406,7 +406,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
           <div class="fg"><label>الزبون</label>
             <select v-model="aud.customer_code" @change="onAudCustomer">
               <option value="">اختر الزبون</option>
-              <option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
+              <option v-for="c in audCustomers" :key="c.customer_code" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
             </select>
           </div>
           <div class="fg"><label>تسلسل القائمة</label>
@@ -418,11 +418,13 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         </div>
       </div>
 
-      <div v-if="auditItems.length===0 && (aud.customer_code||aud.list_sequence)" class="empty"><div class="icon">✅</div><p>لا توجد عناصر بانتظار التدقيق</p></div>
+      <div v-if="auditItems.length===0 && aud.customer_code && aud.list_sequence" class="empty"><div class="icon">✅</div><p>لا توجد عناصر بانتظار التدقيق</p></div>
+      <div v-if="!(aud.customer_code && aud.list_sequence)" class="empty"><div class="icon">🔍</div><p>يرجى اختيار الزبون وتسلسل القائمة لعرض العناصر</p></div>
 
       <div v-if="auditItems.length>0" class="card">
         <div class="card-title">عناصر التدقيق ({{auditItems.length}})</div>
-        <div class="alert a-info">ملاحظة: اختيار نوع المشكلة يرسل العنصر مباشرة إلى مرحلة القرار لتحديد الوجهة والاعتماد</div>
+        <div class="alert a-info">ملاحظة: اختر نوع المشكلة لكل عنصر، ثم اضغط "إنهاء التدقيق" لإرسال القائمة كاملة إلى مرحلة القرار</div>
+        <button class="btn btn-success no-print" @click="finishAudit">🏁 إنهاء التدقيق ونقل القائمة إلى القرار</button>
         <div class="tbl-wrap">
           <table>
             <thead><tr><th>#</th><th>اسم العنصر</th><th>الأصلية</th><th>المتبقية</th><th>تاريخ الاستلام</th><th>تاريخ الجرد</th><th>تسلسل القائمة</th><th>نوع المشكلة</th><th>ملاحظة</th></tr></thead>
@@ -460,7 +462,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
           <div class="fg"><label>الزبون</label>
             <select v-model="dq.customer_code" @change="onDQCustomer">
               <option value="">اختر الزبون</option>
-              <option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
+              <option v-for="c in dqCustomers" :key="c.customer_code" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
             </select>
           </div>
           <div class="fg"><label>تسلسل القائمة</label>
@@ -472,7 +474,8 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         </div>
       </div>
 
-      <div v-if="decisionItems.length===0" class="empty"><div class="icon">✅</div><p>لا توجد عناصر بانتظار القرار</p></div>
+      <div v-if="decisionItems.length===0 && dq.customer_code && dq.list_sequence" class="empty"><div class="icon">✅</div><p>لا توجد عناصر بانتظار القرار</p></div>
+      <div v-if="!(dq.customer_code && dq.list_sequence)" class="empty"><div class="icon">🔍</div><p>يرجى اختيار الزبون وتسلسل القائمة لعرض العناصر</p></div>
 
       <div v-if="decisionItems.length>0" class="card">
         <div class="card-title">عناصر بانتظار القرار ({{decisionItems.length}})</div>
@@ -935,10 +938,31 @@ const PROBLEM_TYPES = [
   {value:'not_ours',label:'ليست لنا',dest:'customer_return',auto:true},
   {value:'out_warranty_working',label:'خارج الضمان/ شغال',dests:['working','customer_return','damaged'],auto:false},
   {value:'out_warranty_broken',label:'خارج الضمان/ كسر',dests:['damaged','customer_return'],auto:false},
+  {value:'broken_connector',label:'كونيكتر مكسور',dests:['damaged','customer_return'],auto:false},
   {value:'out_warranty_damaged',label:'خارج الضمان/ تالف',dests:['damaged','customer_return'],auto:false,needsNote:true},
   {value:'out_warranty_used',label:'خارج الضمان/ مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
   {value:'out_warranty_expired',label:'خارج الضمان/ منتهي الصالحية',dests:['damaged','customer_return'],auto:false,needsNote:true},
   {value:'out_warranty_factory_fault',label:'خارج الضمان/ عطل مصنعي',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_working_used',label:'منهي الصلاحية + شغال+مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_broken_used',label:'منتهي الصلاحية + كسر+مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_off_used',label:'منتهي الصلاحية + طافي+مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_touch_used',label:'منتهي الصلاحية + لمس+مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_line',label:'مستخدم + خط',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_flicker',label:'مستخدم + ترمش',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_tape_cut',label:'مستخدم + شريط مقطوع',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_tape_hit',label:'مستخدم + شريط مضروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_line',label:'منتهي الصلاحية + خط',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_tape_cut',label:'منتهي الصلاحية + شريط مقطوع',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_connector_broken',label:'منتهي الصلاحية + كسر كونكتر',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_connector',label:'مستخدم + كونكتر',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'screen_video_required',label:'مطلوب فديو للشاشة',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'tape_hit',label:'شريط مضروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'pull_error_used',label:'خطا في الشد مستخدمة',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'update',label:'تحديث',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'old_purchase',label:'شراء قديم',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'open_error_used',label:'خطا في الفتح مستخدمة',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'no_details_no_group_reply',label:'بدون تفاصيل و لم يرد الرد في الكروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'not_sold_to_customer',label:'غير مباع للزبون',dests:['damaged','customer_return'],auto:false,needsNote:true},
   {value:'return_damaged',label:'راجع تالف',dest:'damaged',auto:true},
   {value:'pending',label:'معلق',dest:'pending',auto:true},
 ];
@@ -1086,6 +1110,15 @@ createApp({
     const inv = reactive({customer_code:'',list_sequence:'',inspector:''});
     const invItem = reactive({item_name:'',qty:1,barcode:'',note:''});
     const editInvId = ref(null); const editInvForm = reactive({});
+    const invCustomers = computed(()=>{
+      const map=new Map();
+      db.receptions.forEach(r=>{
+        const items=db.inventory_items.filter(i=>i.list_sequence===r.list_sequence&&i.customer_code===r.customer_code);
+        const finished=items.length>0&&items.every(i=>i.status!=='pending_send');
+        if(!finished&&!map.has(r.customer_code)) map.set(r.customer_code,r.customer_name);
+      });
+      return [...map].map(([customer_code,name])=>({customer_code,name}));
+    });
     const invSequences = computed(()=>{
       if(!inv.customer_code) return [];
       const seqs=[...new Set(db.receptions.filter(r=>r.customer_code===inv.customer_code).map(r=>({list_sequence:r.list_sequence,receipt_date:r.receipt_date})))];
@@ -1179,31 +1212,48 @@ createApp({
 
     // ─── AUDIT ───
     const aud = reactive({customer_code:'',list_sequence:''});
+    const audCustomers = computed(()=>{
+      const map=new Map();
+      db.audit_items.filter(a=>a.qty_remaining>0).forEach(a=>{ if(!map.has(a.customer_code)) map.set(a.customer_code,a.customer_name); });
+      return [...map].map(([customer_code,name])=>({customer_code,name}));
+    });
     const audSequences = computed(()=>{
       if(!aud.customer_code) return [];
       return [...new Set(db.audit_items.filter(a=>a.customer_code===aud.customer_code).map(a=>a.list_sequence))].map(s=>({list_sequence:s}));
     });
-    const auditItems = computed(()=>db.audit_items.filter(a=>{
-      if(a.qty_remaining<=0) return false;
-      if(aud.customer_code&&a.customer_code!==aud.customer_code) return false;
-      if(aud.list_sequence&&a.list_sequence!==aud.list_sequence) return false;
-      return true;
-    }));
+    const auditItems = computed(()=>{
+      if(!aud.customer_code||!aud.list_sequence) return [];
+      return db.audit_items.filter(a=>{
+        if(a.qty_remaining<=0) return false;
+        if(a.customer_code!==aud.customer_code) return false;
+        if(a.list_sequence!==aud.list_sequence) return false;
+        return true;
+      });
+    });
     function onAudCustomer(){aud.list_sequence='';}
     function onProblemSelect(item){
-      const pt=getPTInfo(item.selected_problem);
-      if(!pt) return;
-      setTimeout(()=>{
-        sendToDecision(item,pt);
-      },100);
+      save();
     }
     function sendToDecision(item,pt){
       const qty=item.qty_remaining;
       const dest=pt.auto?pt.dest:'';
       queueDecision(item,dest,qty,item.selected_problem,item.audit_note||'','full',item.price);
       item.qty_remaining=0;
+    }
+    function finishAudit(){
+      const items=auditItems.value;
+      if(items.length===0) return;
+      const missing=items.filter(it=>!it.selected_problem);
+      if(missing.length>0){
+        showMsg(`❌ يرجى اختيار نوع المشكلة لكل العناصر قبل الإنهاء (متبقي ${missing.length})`,'a-danger');
+        return;
+      }
+      items.forEach(item=>{
+        const pt=getPTInfo(item.selected_problem);
+        sendToDecision(item,pt);
+      });
       save();
-      showMsg(`⏳ "${item.item_name}" أُرسل إلى مرحلة القرار`);
+      showMsg(`⏳ تم إرسال القائمة كاملة (${items.length}) إلى مرحلة القرار`);
     }
     function queueDecision(item,dest,qty,problem_type,note,compensation_type,price){
       db.decision_items.push({
@@ -1224,15 +1274,23 @@ createApp({
 
     // ─── DECISION STAGE ───
     const dq = reactive({customer_code:'',list_sequence:''});
+    const dqCustomers = computed(()=>{
+      const map=new Map();
+      db.decision_items.forEach(d=>{ if(!map.has(d.customer_code)) map.set(d.customer_code,d.customer_name); });
+      return [...map].map(([customer_code,name])=>({customer_code,name}));
+    });
     const dqSequences = computed(()=>{
       if(!dq.customer_code) return [];
       return [...new Set(db.decision_items.filter(d=>d.customer_code===dq.customer_code).map(d=>d.list_sequence))].map(s=>({list_sequence:s}));
     });
-    const decisionItems = computed(()=>db.decision_items.filter(d=>{
-      if(dq.customer_code&&d.customer_code!==dq.customer_code) return false;
-      if(dq.list_sequence&&d.list_sequence!==dq.list_sequence) return false;
-      return true;
-    }));
+    const decisionItems = computed(()=>{
+      if(!dq.customer_code||!dq.list_sequence) return [];
+      return db.decision_items.filter(d=>{
+        if(d.customer_code!==dq.customer_code) return false;
+        if(d.list_sequence!==dq.list_sequence) return false;
+        return true;
+      });
+    });
     function onDQCustomer(){dq.list_sequence='';}
     function approveDecision(d){
       if(!d.dest){showMsg('❌ اختر الوجهة أولاً','a-danger');return;}
@@ -1536,10 +1594,10 @@ createApp({
       can,nav,roleLabel,PROBLEM_TYPES,ROLES,ROLE_COLORS,DEST_COLORS,permTable,
       getPTInfo,getPTColor,getDestLabel,
       r1,r1f,lastReception,onR1Customer,addReception,filteredReceptions,printLabel,
-      inv,invItem,invSequences,invCustomer,invItems,invPendingItems,editInvId,editInvForm,
+      inv,invItem,invCustomers,invSequences,invCustomer,invItems,invPendingItems,editInvId,editInvForm,
       onInvCustomer,addInvItem,receiptDateOf,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,finishInventory,
-      aud,audSequences,auditItems,onAudCustomer,onProblemSelect,restoreItem,
-      dq,dqSequences,decisionItems,onDQCustomer,approveDecision,rejectDecision,
+      aud,audCustomers,audSequences,auditItems,onAudCustomer,onProblemSelect,finishAudit,restoreItem,
+      dq,dqCustomers,dqSequences,decisionItems,onDQCustomer,approveDecision,rejectDecision,
       wf,wfSequences,filteredWorking,editWId,editWForm,onWFCustomer,startWEdit,saveWEdit,
       dmf,dmfSequences,filteredDamaged,editDId,editDForm,onDMFCustomer,startDEdit,saveDEdit,
       crf,crfSequences,filteredCR,onCRFCustomer,
