@@ -1,4 +1,5 @@
 node_modules/
+sync-server/data/
 .env
 .env.local
 *.log

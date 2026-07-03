@@ -23,6 +23,13 @@ function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS user_roles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      role TEXT NOT NULL CHECK(role IN ('admin','reception','inventory','auditor','manager')),
+      UNIQUE(user_id, role)
+    );
+
     CREATE TABLE IF NOT EXISTS customers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       customer_code TEXT UNIQUE NOT NULL,
@@ -165,6 +172,15 @@ function initDb() {
     db.prepare(`INSERT INTO customers (customer_code, name, default_price) VALUES (?,?,?)`).run('C002', 'مؤسسة النجاح', 200);
     db.prepare(`INSERT INTO customers (customer_code, name, default_price) VALUES (?,?,?)`).run('C003', 'شركة البيان', 175);
   }
+
+  // Migrate any users missing rows in user_roles (backfill from legacy single role column)
+  const usersWithoutRoles = db.prepare(`
+    SELECT u.id, u.role FROM users u
+    LEFT JOIN user_roles ur ON ur.user_id = u.id
+    WHERE ur.id IS NULL
+  `).all();
+  const insertRole = db.prepare('INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?,?)');
+  usersWithoutRoles.forEach(u => insertRole.run(u.id, u.role));
 
   console.log('Database initialized');
 }

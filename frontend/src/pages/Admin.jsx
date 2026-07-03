@@ -14,7 +14,7 @@ const ROLE_COLORS = { admin: 'badge-red', reception: 'badge-green', inventory: '
 
 export default function Admin() {
   const [users, setUsers] = useState([]);
-  const [form, setForm] = useState({ username: '', password: '', full_name: '', role: 'reception' });
+  const [form, setForm] = useState({ username: '', password: '', full_name: '', roles: ['reception'] });
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [msg, setMsg] = useState('');
@@ -25,15 +25,21 @@ export default function Admin() {
 
   const handleAdd = async (e) => {
     e.preventDefault();
+    if (!form.roles.length) return setMsg('❌ يرجى اختيار دور واحد على الأقل');
     try {
       await axios.post('/api/users', form);
       setMsg('✅ تمت إضافة المستخدم');
-      setForm({ username: '', password: '', full_name: '', role: 'reception' });
+      setForm({ username: '', password: '', full_name: '', roles: ['reception'] });
       load();
     } catch (e) { setMsg('❌ ' + (e.response?.data?.error || 'خطأ')); }
   };
 
+  const toggleRole = (roles, setRoles, role) => {
+    setRoles(roles.includes(role) ? roles.filter(r => r !== role) : [...roles, role]);
+  };
+
   const saveEdit = async (id) => {
+    if (!editForm.roles.length) return setMsg('❌ يرجى اختيار دور واحد على الأقل');
     await axios.put(`/api/users/${id}`, editForm);
     setEditId(null); load(); setMsg('✅ تم التحديث');
   };
@@ -79,10 +85,16 @@ export default function Admin() {
               <input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} placeholder="الاسم الكامل بالعربية" required />
             </div>
             <div className="form-group">
-              <label>الدور *</label>
-              <select value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
-                {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-              </select>
+              <label>الأدوار *</label>
+              <div style={{display:'flex', flexWrap:'wrap', gap:'8px 14px'}}>
+                {ROLES.map(r => (
+                  <label key={r.value} style={{display:'flex', alignItems:'center', gap:'5px', fontSize:'0.85rem', fontWeight:400, cursor:'pointer'}}>
+                    <input type="checkbox" checked={form.roles.includes(r.value)}
+                      onChange={() => toggleRole(form.roles, roles => setForm({...form, roles}), r.value)} />
+                    {r.label}
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
           <button type="submit" className="btn btn-primary" style={{marginTop:'12px'}}>➕ إضافة مستخدم</button>
@@ -93,7 +105,7 @@ export default function Admin() {
         <div className="card-title">مستخدمو النظام ({users.length})</div>
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الدور</th><th>الصلاحيات</th><th>تاريخ الإنشاء</th><th>إجراءات</th></tr></thead>
+            <thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الأدوار</th><th>الصلاحيات</th><th>تاريخ الإنشاء</th><th>إجراءات</th></tr></thead>
             <tbody>
               {users.map((u, i) => (
                 <tr key={u.id}>
@@ -102,15 +114,21 @@ export default function Admin() {
                   <td>{editId===u.id ? <input value={editForm.full_name} onChange={e=>setEditForm({...editForm,full_name:e.target.value})} style={{width:'100%'}} /> : u.full_name}</td>
                   <td>
                     {editId===u.id
-                      ? <select value={editForm.role} onChange={e=>setEditForm({...editForm,role:e.target.value})}>
-                          {ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
-                        </select>
-                      : <span className={`badge ${ROLE_COLORS[u.role]}`}>{ROLES.find(r=>r.value===u.role)?.label}</span>
+                      ? <div style={{display:'flex', flexWrap:'wrap', gap:'8px 14px'}}>
+                          {ROLES.map(r => (
+                            <label key={r.value} style={{display:'flex', alignItems:'center', gap:'5px', fontSize:'0.85rem', fontWeight:400, cursor:'pointer'}}>
+                              <input type="checkbox" checked={editForm.roles.includes(r.value)}
+                                onChange={() => toggleRole(editForm.roles, roles => setEditForm({...editForm, roles}), r.value)} />
+                              {r.label}
+                            </label>
+                          ))}
+                        </div>
+                      : u.roles.map(r => <span key={r} className={`badge ${ROLE_COLORS[r]}`} style={{marginInlineEnd:'4px'}}>{ROLES.find(x=>x.value===r)?.label}</span>)
                     }
                   </td>
                   <td>
                     <div style={{display:'flex', flexWrap:'wrap', gap:'4px', maxWidth:'250px'}}>
-                      {(ROLE_PERMISSIONS[editId===u.id ? editForm.role : u.role] || []).map(p => (
+                      {[...new Set((editId===u.id ? editForm.roles : u.roles).flatMap(r => ROLE_PERMISSIONS[r] || []))].map(p => (
                         <span key={p} style={{background:'#e3f2fd', color:'#0d47a1', padding:'1px 6px', borderRadius:'10px', fontSize:'0.7rem'}}>{p}</span>
                       ))}
                     </div>
@@ -125,7 +143,7 @@ export default function Admin() {
                         <button className="btn btn-success btn-xs" onClick={() => saveEdit(u.id)}>💾</button>
                         <button className="btn btn-secondary btn-xs" onClick={() => setEditId(null)}>✖</button>
                       </> : <>
-                        <button className="btn btn-outline btn-xs" onClick={() => { setEditId(u.id); setEditForm({full_name:u.full_name, role:u.role, password:''}); }}>✏️</button>
+                        <button className="btn btn-outline btn-xs" onClick={() => { setEditId(u.id); setEditForm({full_name:u.full_name, roles:[...u.roles], password:''}); }}>✏️</button>
                         {u.id !== me?.id && <button className="btn btn-danger btn-xs" onClick={() => deleteUser(u.id)}>🗑️</button>}
                       </>}
                     </div>

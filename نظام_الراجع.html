@@ -41,7 +41,14 @@ body{font-family:'Cairo',sans-serif;background:#f0f4f8;color:#1a1a2e;direction:r
 
 /* FORM */
 .fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
-.fg{display:flex;flex-direction:column;gap:5px}
+.fg{display:flex;flex-direction:column;gap:5px;position:relative}
+.role-checks{display:flex;flex-wrap:wrap;gap:8px 14px}
+.role-check{display:flex;align-items:center;gap:5px;font-size:.85rem;font-weight:400;cursor:pointer}
+.ac-list{position:absolute;top:100%;right:0;left:0;margin-top:2px;background:white;border:1px solid #cfd8dc;border-radius:7px;box-shadow:0 4px 14px rgba(0,0,0,.15);max-height:280px;overflow-y:auto;z-index:50}
+.ac-item{padding:8px 11px;font-size:.85rem;cursor:pointer;border-bottom:1px solid #eceff1}
+.ac-item:last-child{border-bottom:none}
+.ac-item:hover,.ac-item.active{background:#e3f2fd}
+.ac-item small{display:block;color:var(--grey);font-size:.72rem;margin-top:1px}
 .fg label{font-size:.82rem;font-weight:500;color:var(--grey)}
 .fg input,.fg select,.fg textarea{padding:8px 11px;border:1px solid #cfd8dc;border-radius:7px;font-family:'Cairo',sans-serif;font-size:.88rem;background:white;direction:rtl;transition:border-color .2s}
 .fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--blue3);box-shadow:0 0 0 3px rgba(33,150,243,.1)}
@@ -167,6 +174,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
       <template v-if="can('admin','auditor','manager')">
         <div class="nav-sec">التدقيق والنتائج</div>
         <div class="nav-item" :class="{active:page==='audit'}" @click="nav('audit')"><span>🔍</span> مرحلة التدقيق</div>
+        <div class="nav-item" :class="{active:page==='decision'}" @click="nav('decision')"><span>⚖️</span> مرحلة القرار</div>
         <div class="nav-item" :class="{active:page==='working'}" @click="nav('working')"><span>✅</span> الراجع الشغال</div>
         <div class="nav-item" :class="{active:page==='damaged'}" @click="nav('damaged')"><span>⚠️</span> الراجع التالف</div>
         <div class="nav-item" :class="{active:page==='customer_return'}" @click="nav('customer_return')"><span>🔄</span> راجع للزبون</div>
@@ -181,7 +189,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
     </nav>
     <div class="sb-footer">
       <div class="uname">👤 {{ currentUser.full_name }}</div>
-      <div class="urole">{{ roleLabel(currentUser.role) }}</div>
+      <div class="urole">{{ currentUser.roles.map(roleLabel).join('، ') }}</div>
       <button class="logout-btn" @click="logout">🚪 تسجيل الخروج</button>
     </div>
   </div>
@@ -295,7 +303,12 @@ tfoot tr{background:#f5f9ff;font-weight:700}
               <option v-for="s in invSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}} - {{s.receipt_date}}</option>
             </select>
           </div>
-          <div class="fg"><label>اسم مسؤول الجرد</label><input v-model="inv.inspector" placeholder="اسم المسؤول"></div>
+          <div class="fg"><label>اسم مسؤول الجرد</label>
+            <select v-model="inv.inspector">
+              <option value="">اختر المسؤول</option>
+              <option v-for="u in db.users" :key="u.id" :value="u.full_name">{{u.full_name}}</option>
+            </select>
+          </div>
         </div>
         <div v-if="invCustomer && inv.list_sequence" class="info-row" style="margin-top:10px">
           <span class="info-chip">{{invCustomer.name}}</span>
@@ -313,9 +326,23 @@ tfoot tr{background:#f5f9ff;font-weight:700}
             <span v-if="barcodeMatch" style="font-size:.75rem;color:var(--green);margin-top:2px">✅ موجود في قاعدة البيانات: {{barcodeMatch}}</span>
             <span v-if="invItem.barcode && !barcodeMatch && db.item_database.length>0" style="font-size:.75rem;color:var(--orange);margin-top:2px">⚠️ غير موجود في قاعدة البيانات</span>
           </div>
-          <div class="fg"><label>اسم العنصر *</label><input v-model="invItem.item_name" placeholder="يُملأ تلقائياً من التفاصيل أو أدخل يدوياً"></div>
+          <div class="fg">
+            <label>اسم العنصر *</label>
+            <input v-model="invItem.item_name" @input="onItemNameInput" @focus="onItemNameInput" @blur="hideItemNameSuggestions" placeholder="يُملأ تلقائياً من الباركود أو ابحث يدوياً بالاسم" autocomplete="off">
+            <div v-if="showItemNameSuggestions && itemNameSuggestions.length" class="ac-list">
+              <div v-for="s in itemNameSuggestions" :key="s.id" class="ac-item" @mousedown.prevent="selectItemNameSuggestion(s)">
+                {{s.barcode}}<small>{{s.item_name}}</small>
+              </div>
+            </div>
+          </div>
           <div class="fg"><label>الكمية *</label><input type="number" min="1" v-model.number="invItem.qty"></div>
-          <div class="fg"><label>ملاحظة</label><input v-model="invItem.note" placeholder="ملاحظة اختيارية"></div>
+          <div class="fg"><label>ملاحظة</label>
+            <select v-model="invItem.note">
+              <option value="">-- اختر --</option>
+              <option value="OK">OK</option>
+              <option value="NO INFORMATION">NO INFORMATION</option>
+            </select>
+          </div>
         </div>
         <div class="gap" style="margin-top:12px">
           <button class="btn btn-primary" @click="addInvItem">➕ إضافة</button>
@@ -323,11 +350,15 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         </div>
       </div>
 
-      <div v-if="invItems.length>0" class="card">
-        <div class="card-title">عناصر الجرد ({{invItems.length}})</div>
-        <div class="tbl-wrap">
+      <div v-if="inv.list_sequence" class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <span>عناصر الجرد ({{invItems.length}})</span>
+          <button class="btn btn-success btn-sm no-print" @click="finishInventory">🏁 FINISH</button>
+        </div>
+        <div v-if="invItems.length===0" class="empty"><div class="icon">📭</div><p>لا توجد عناصر</p></div>
+        <div v-else class="tbl-wrap">
           <table>
-            <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>المتبقية</th><th>الباركود</th><th>تاريخ الجرد</th><th>ملاحظة</th><th>الحالة</th><th class="no-print">إجراءات</th></tr></thead>
+            <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>المتبقية</th><th>الباركود</th><th>تاريخ استلام الراجع</th><th>تاريخ الجرد</th><th>ملاحظة</th><th>الحالة</th><th class="no-print">إجراءات</th></tr></thead>
             <tbody>
               <tr v-for="(item,i) in invItems" :key="item.id">
                 <td>{{i+1}}</td>
@@ -335,8 +366,15 @@ tfoot tr{background:#f5f9ff;font-weight:700}
                 <td><template v-if="editInvId===item.id"><input type="number" v-model.number="editInvForm.qty" style="width:70px"></template><span v-else>{{item.qty}}</span></td>
                 <td>{{item.qty_remaining}}</td>
                 <td>{{item.barcode||'-'}}</td>
+                <td>{{receiptDateOf(item)}}</td>
                 <td>{{item.count_date}}</td>
-                <td><template v-if="editInvId===item.id"><input v-model="editInvForm.note" style="width:100%"></template><span v-else>{{item.note||'-'}}</span></td>
+                <td><template v-if="editInvId===item.id">
+                    <select v-model="editInvForm.note" style="width:100%">
+                      <option value="">-- اختر --</option>
+                      <option value="OK">OK</option>
+                      <option value="NO INFORMATION">NO INFORMATION</option>
+                    </select>
+                  </template><span v-else>{{item.note||'-'}}</span></td>
                 <td><span :class="['badge', item.status==='pending_audit'?'b-green':'b-blue']">{{item.status==='pending_audit'?'أُرسل للتدقيق':'بانتظار الإرسال'}}</span></td>
                 <td class="no-print">
                   <div class="td-act">
@@ -384,10 +422,10 @@ tfoot tr{background:#f5f9ff;font-weight:700}
 
       <div v-if="auditItems.length>0" class="card">
         <div class="card-title">عناصر التدقيق ({{auditItems.length}})</div>
-        <div class="alert a-info">ملاحظة: يمكن تقسيم الكمية - أدخل كمية جزئية وستبقى الباقية في التدقيق</div>
+        <div class="alert a-info">ملاحظة: اختيار نوع المشكلة يرسل العنصر مباشرة إلى مرحلة القرار لتحديد الوجهة والاعتماد</div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>#</th><th>اسم العنصر</th><th>الأصلية</th><th>المتبقية</th><th>تاريخ الاستلام</th><th>تاريخ الجرد</th><th>تسلسل القائمة</th><th>نوع المشكلة</th><th>ملاحظة</th><th>إجراء</th></tr></thead>
+            <thead><tr><th>#</th><th>اسم العنصر</th><th>الأصلية</th><th>المتبقية</th><th>تاريخ الاستلام</th><th>تاريخ الجرد</th><th>تسلسل القائمة</th><th>نوع المشكلة</th><th>ملاحظة</th></tr></thead>
             <tbody>
               <tr v-for="(item,i) in auditItems" :key="item.id">
                 <td>{{i+1}}</td>
@@ -402,48 +440,76 @@ tfoot tr{background:#f5f9ff;font-weight:700}
                     <option value="">-- اختر نوع المشكلة --</option>
                     <option v-for="pt in PROBLEM_TYPES" :key="pt.value" :value="pt.value">{{pt.label}}</option>
                   </select>
-                  <div v-if="item.selected_problem" style="margin-top:3px">
-                    <span :class="['badge', getPTColor(item.selected_problem)]" style="font-size:.7rem">
-                      {{ getPTInfo(item.selected_problem)?.auto ? '↠ تلقائي: '+getDestLabel(getPTInfo(item.selected_problem).dest) : 'يتطلب اختيار الوجهة' }}
-                    </span>
-                  </div>
                 </td>
                 <td><input v-model="item.audit_note" placeholder="ملاحظة" style="width:100px;font-size:.8rem;padding:3px 6px;border:1px solid #cfd8dc;border-radius:5px"></td>
-                <td>
-                  <div class="td-act">
-                    <button v-if="item.selected_problem && !getPTInfo(item.selected_problem)?.auto" class="btn btn-primary btn-xs" @click="openTransfer(item)">نقل ➜</button>
-                    <span v-if="item.selected_problem && getPTInfo(item.selected_problem)?.auto" style="color:var(--green);font-size:.8rem">تلقائي ✓</span>
-                  </div>
-                </td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
+    </div>
 
-      <!-- Transfer Modal -->
-      <div v-if="transferItem" class="modal-ov" @click.self="transferItem=null">
-        <div class="modal">
-          <div class="modal-title">نقل: {{ transferItem.item_name }}</div>
-          <div class="alert a-info">الكمية المتبقية: <strong>{{transferItem.qty_remaining}}</strong></div>
-          <div class="fgrid">
-            <div class="fg"><label>الكمية للنقل *</label><input type="number" min="1" :max="transferItem.qty_remaining" v-model.number="tf.qty"></div>
-            <div class="fg"><label>الوجهة *</label>
-              <select v-model="tf.destination">
-                <option value="">-- اختر الوجهة --</option>
-                <option v-for="d in getPTInfo(transferItem.selected_problem)?.dests||[]" :key="d" :value="d">{{getDestLabel(d)}}</option>
-              </select>
-            </div>
-            <div v-if="tf.destination==='working'||tf.destination==='damaged'" class="fg"><label>السعر</label><input type="number" v-model.number="tf.price"></div>
-            <div v-if="tf.destination==='damaged'" class="fg"><label>نوع التعويض</label>
-              <select v-model="tf.compensation_type"><option value="full">تعويض كامل</option><option value="half">تعويض نصفي</option></select>
-            </div>
-            <div class="fg span2"><label>ملاحظة</label><textarea rows="2" v-model="tf.note" style="resize:vertical"></textarea></div>
+    <!-- STAGE: DECISION -->
+    <div v-if="page==='decision'">
+      <div class="page-hdr no-print">
+        <div><div class="page-title">⚖️ مرحلة القرار</div><div class="page-sub">مراجعة واعتماد نتائج التدقيق قبل الترحيل النهائي</div></div>
+      </div>
+      <div class="card no-print">
+        <div class="card-title">اختيار الزبون والتسلسل</div>
+        <div class="fgrid">
+          <div class="fg"><label>الزبون</label>
+            <select v-model="dq.customer_code" @change="onDQCustomer">
+              <option value="">اختر الزبون</option>
+              <option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
+            </select>
           </div>
-          <div class="modal-footer">
-            <button class="btn btn-secondary" @click="transferItem=null">إلغاء</button>
-            <button class="btn btn-primary" @click="doTransfer">✅ تأكيد النقل</button>
+          <div class="fg"><label>تسلسل القائمة</label>
+            <select v-model="dq.list_sequence">
+              <option value="">الكل</option>
+              <option v-for="s in dqSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}}</option>
+            </select>
           </div>
+        </div>
+      </div>
+
+      <div v-if="decisionItems.length===0" class="empty"><div class="icon">✅</div><p>لا توجد عناصر بانتظار القرار</p></div>
+
+      <div v-if="decisionItems.length>0" class="card">
+        <div class="card-title">عناصر بانتظار القرار ({{decisionItems.length}})</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>#</th><th>اسم العنصر</th><th>الكمية</th><th>نوع المشكلة</th><th>الوجهة</th><th>السعر</th><th>نوع التعويض</th><th>ملاحظة التدقيق</th><th>ملاحظة القرار</th><th>إجراء</th></tr></thead>
+            <tbody>
+              <tr v-for="(d,i) in decisionItems" :key="d.id">
+                <td>{{i+1}}</td>
+                <td><strong>{{d.item_name}}</strong></td>
+                <td>{{d.qty}}</td>
+                <td><span :class="['badge', getPTColor(d.problem_type)]">{{getPTInfo(d.problem_type)?.label||d.problem_type}}</span></td>
+                <td>
+                  <span v-if="getPTInfo(d.problem_type)?.auto" :class="['badge', DEST_COLORS[d.dest]]">{{getDestLabel(d.dest)}}</span>
+                  <select v-else v-model="d.dest" style="min-width:150px;font-size:.8rem">
+                    <option value="">-- اختر الوجهة --</option>
+                    <option v-for="dest in getPTInfo(d.problem_type)?.dests||[]" :key="dest" :value="dest">{{getDestLabel(dest)}}</option>
+                  </select>
+                </td>
+                <td><input v-if="d.dest==='working'||d.dest==='damaged'" type="number" v-model.number="d.price" style="width:70px;font-size:.8rem;padding:3px 6px;border:1px solid #cfd8dc;border-radius:5px"><span v-else>-</span></td>
+                <td>
+                  <select v-if="d.dest==='damaged'" v-model="d.compensation_type" style="font-size:.8rem">
+                    <option value="full">تعويض كامل</option><option value="half">تعويض نصفي</option>
+                  </select>
+                  <span v-else>-</span>
+                </td>
+                <td>{{d.note||'-'}}</td>
+                <td><input v-model="d.decision_note" placeholder="ملاحظة القرار" style="width:120px;font-size:.8rem;padding:3px 6px;border:1px solid #cfd8dc;border-radius:5px"></td>
+                <td>
+                  <div class="td-act">
+                    <button class="btn btn-success btn-xs" @click="approveDecision(d)">✅ موافقة</button>
+                    <button class="btn btn-danger btn-xs" @click="rejectDecision(d)">❌ رفض</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -791,10 +857,12 @@ tfoot tr{background:#f5f9ff;font-weight:700}
           <div class="fg"><label>اسم المستخدم *</label><input v-model="newUser.username" placeholder="username"></div>
           <div class="fg"><label>كلمة المرور *</label><input type="password" v-model="newUser.password" placeholder="كلمة المرور"></div>
           <div class="fg"><label>الاسم الكامل *</label><input v-model="newUser.full_name" placeholder="الاسم بالعربية"></div>
-          <div class="fg"><label>الدور *</label>
-            <select v-model="newUser.role">
-              <option v-for="r in ROLES" :key="r.value" :value="r.value">{{r.label}}</option>
-            </select>
+          <div class="fg"><label>الأدوار *</label>
+            <div class="role-checks">
+              <label v-for="r in ROLES" :key="r.value" class="role-check">
+                <input type="checkbox" :value="r.value" v-model="newUser.roles"> {{r.label}}
+              </label>
+            </div>
           </div>
         </div>
         <button class="btn btn-primary" style="margin-top:12px" @click="addUser">➕ إضافة مستخدم</button>
@@ -802,14 +870,22 @@ tfoot tr{background:#f5f9ff;font-weight:700}
       <div class="card">
         <div class="card-title">مستخدمو النظام</div>
         <div class="tbl-wrap"><table>
-          <thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الدور</th><th>إجراءات</th></tr></thead>
+          <thead><tr><th>#</th><th>اسم المستخدم</th><th>الاسم الكامل</th><th>الأدوار</th><th>إجراءات</th></tr></thead>
           <tbody>
             <tr v-for="(u,i) in db.users" :key="u.id">
               <td>{{i+1}}</td><td><strong>{{u.username}}</strong></td>
               <td><template v-if="editUserId===u.id"><input v-model="editUserForm.full_name" style="width:100%"></template><span v-else>{{u.full_name}}</span></td>
               <td>
-                <template v-if="editUserId===u.id"><select v-model="editUserForm.role"><option v-for="r in ROLES" :key="r.value" :value="r.value">{{r.label}}</option></select></template>
-                <span v-else :class="['badge',ROLE_COLORS[u.role]]">{{roleLabel(u.role)}}</span>
+                <template v-if="editUserId===u.id">
+                  <div class="role-checks">
+                    <label v-for="r in ROLES" :key="r.value" class="role-check">
+                      <input type="checkbox" :value="r.value" v-model="editUserForm.roles"> {{r.label}}
+                    </label>
+                  </div>
+                </template>
+                <template v-else>
+                  <span v-for="r in u.roles" :key="r" :class="['badge',ROLE_COLORS[r]]" style="margin-inline-end:4px">{{roleLabel(r)}}</span>
+                </template>
               </td>
               <td><div class="td-act">
                 <template v-if="editUserId===u.id">
@@ -845,7 +921,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
 </div>
 
 <script>
-const { createApp, ref, computed, reactive, nextTick } = Vue;
+const { createApp, ref, computed, reactive, nextTick, onMounted } = Vue;
 
 const KEY = 'rs_db';
 const TODAY = () => new Date().toISOString().slice(0,10);
@@ -880,23 +956,27 @@ const DEST_COLORS = {working:'b-green',damaged:'b-red',customer_return:'b-blue',
 
 function initDB() {
   const saved = localStorage.getItem(KEY);
-  if (saved) return JSON.parse(saved);
+  if (saved) {
+    const db = JSON.parse(saved);
+    db.users.forEach(u => { if(!u.roles) u.roles = u.role ? [u.role] : []; });
+    return db;
+  }
   const db = {
     users: [
-      {id:1,username:'admin',password:'admin123',full_name:'مدير النظام',role:'admin'},
-      {id:2,username:'reception',password:'123456',full_name:'موظف الاستلام',role:'reception'},
-      {id:3,username:'inventory',password:'123456',full_name:'موظف الجرد',role:'inventory'},
-      {id:4,username:'auditor',password:'123456',full_name:'المدقق',role:'auditor'},
-      {id:5,username:'manager',password:'123456',full_name:'المدير',role:'manager'},
+      {id:1,username:'admin',password:'admin123',full_name:'مدير النظام',roles:['admin']},
+      {id:2,username:'reception',password:'123456',full_name:'موظف الاستلام',roles:['reception']},
+      {id:3,username:'inventory',password:'123456',full_name:'موظف الجرد',roles:['inventory']},
+      {id:4,username:'auditor',password:'123456',full_name:'المدقق',roles:['auditor']},
+      {id:5,username:'manager',password:'123456',full_name:'المدير',roles:['manager']},
     ],
     customers: [
       {id:1,customer_code:'C001',name:'شركة الأمل للتجارة',default_price:150},
       {id:2,customer_code:'C002',name:'مؤسسة النجاح',default_price:200},
       {id:3,customer_code:'C003',name:'شركة البيان',default_price:175},
     ],
-    receptions:[],inventory_items:[],audit_items:[],
+    receptions:[],inventory_items:[],audit_items:[],decision_items:[],
     working_returns:[],damaged_returns:[],customer_returns:[],pending_items:[],
-    counters:{users:5,customers:3,receptions:0,inventory_items:0,audit_items:0,working_returns:0,damaged_returns:0,customer_returns:0,pending_items:0}
+    counters:{users:5,customers:3,receptions:0,inventory_items:0,audit_items:0,decision_items:0,working_returns:0,damaged_returns:0,customer_returns:0,pending_items:0}
   };
   localStorage.setItem(KEY, JSON.stringify(db));
   return db;
@@ -905,10 +985,31 @@ function initDB() {
 function saveDB(db) { localStorage.setItem(KEY, JSON.stringify(db)); }
 function nextId(db, table) { db.counters[table] = (db.counters[table]||0)+1; return db.counters[table]; }
 
+const SYNC_URL = '/api/db';
+async function fetchServerDB(timeoutMs = 1500) {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), timeoutMs);
+    const res = await fetch(SYNC_URL, { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    return await res.json(); // { data, updated_at }
+  } catch (e) { return null; } // offline / server not running / opened via file://
+}
+
+(async () => {
+const local = initDB();
+const server = await fetchServerDB();
+const seed = (server && server.data) ? server.data : local;
+let lastSyncedAt = (server && server.data) ? server.updated_at : 0;
+if (server && server.data) saveDB(seed);
+
 createApp({
   setup() {
-    const db = reactive(initDB());
-    const currentUser = ref(JSON.parse(sessionStorage.getItem('rs_user')||'null'));
+    const db = reactive(seed);
+    const savedUser = JSON.parse(sessionStorage.getItem('rs_user')||'null');
+    if (savedUser && !savedUser.roles) savedUser.roles = savedUser.role ? [savedUser.role] : [];
+    const currentUser = ref(savedUser);
     const page = ref('dashboard');
     const globalMsg = ref(''); const globalMsgType = ref('a-success');
 
@@ -916,8 +1017,27 @@ createApp({
       globalMsg.value = msg; globalMsgType.value = type;
       setTimeout(()=>globalMsg.value='', 4000);
     }
-    function save() { saveDB(db); }
-    function can(...roles) { return currentUser.value && roles.includes(currentUser.value.role); }
+    function save() {
+      saveDB(db);
+      fetch(SYNC_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: db })
+      }).then(r=>r.ok?r.json():null)
+        .then(j=>{ if (j) lastSyncedAt = j.updated_at; })
+        .catch(()=>{});
+    }
+    onMounted(()=>{
+      setInterval(async ()=>{
+        const s = await fetchServerDB();
+        if (s && s.data && s.updated_at > lastSyncedAt) {
+          Object.assign(db, s.data);
+          saveDB(db);
+          lastSyncedAt = s.updated_at;
+        }
+      }, 5000);
+    });
+    function can(...roles) { return currentUser.value && currentUser.value.roles && roles.some(r=>currentUser.value.roles.includes(r)); }
     function nav(p) { page.value = p; }
     function roleLabel(r) { return ROLES.find(x=>x.value===r)?.label||r; }
     function getPTInfo(v) { return PROBLEM_TYPES.find(p=>p.value===v); }
@@ -972,14 +1092,28 @@ createApp({
       return seqs;
     });
     const invCustomer = computed(()=>db.customers.find(c=>c.customer_code===inv.customer_code));
-    const invItems = computed(()=>db.inventory_items.filter(i=>i.list_sequence===inv.list_sequence&&i.customer_code===inv.customer_code));
+    const invItems = computed(()=>db.inventory_items.filter(i=>i.list_sequence===inv.list_sequence&&i.customer_code===inv.customer_code&&i.status==='pending_send'));
     const invPendingItems = computed(()=>invItems.value.filter(i=>i.status==='pending_send'));
     function onInvCustomer() { inv.list_sequence=''; }
+    function receiptDateOf(item) {
+      if (item.receipt_date) return item.receipt_date;
+      const rec = db.receptions.find(r=>r.list_sequence===item.list_sequence);
+      return rec?.receipt_date || '-';
+    }
     function addInvItem() {
       if(!inv.list_sequence||!inv.customer_code){showMsg('❌ اختر الزبون والتسلسل','a-danger');return;}
       if(!invItem.item_name){showMsg('❌ أدخل اسم العنصر','a-danger');return;}
+      const name=invItem.item_name.trim();
+      const note=invItem.note||null;
+      const dup=invItems.value.find(i=>i.status==='pending_send'&&i.item_name.trim().toLowerCase()===name.toLowerCase()&&(i.note||null)===note);
+      if (dup) {
+        dup.qty+=invItem.qty; dup.qty_remaining+=invItem.qty; save();
+        invItem.item_name=''; invItem.barcode=''; invItem.qty=1; invItem.note='';
+        showMsg(`✅ العنصر موجود مسبقاً - تم إضافة الكمية (الإجمالي: ${dup.qty})`);
+        return;
+      }
       const rec=db.receptions.find(r=>r.list_sequence===inv.list_sequence);
-      const item={id:nextId(db,'inventory_items'),list_sequence:inv.list_sequence,customer_code:inv.customer_code,customer_name:invCustomer.value?.name,item_name:invItem.item_name,qty:invItem.qty,qty_remaining:invItem.qty,barcode:invItem.barcode||null,price:invCustomer.value?.default_price||0,receipt_date:rec?.receipt_date||null,count_date:TODAY(),note:invItem.note||null,status:'pending_send'};
+      const item={id:nextId(db,'inventory_items'),list_sequence:inv.list_sequence,customer_code:inv.customer_code,customer_name:invCustomer.value?.name,item_name:name,qty:invItem.qty,qty_remaining:invItem.qty,barcode:invItem.barcode||null,price:invCustomer.value?.default_price||0,receipt_date:rec?.receipt_date||null,count_date:TODAY(),note:note,status:'pending_send'};
       db.inventory_items.push(item); save();
       invItem.item_name=''; invItem.barcode=''; invItem.qty=1; invItem.note='';
       showMsg('✅ تم الإضافة');
@@ -993,8 +1127,8 @@ createApp({
       const clean = cleanBarcode(code);
       if (!clean) { barcodeMatch.value = ''; return ''; }
       const found = db.item_database.find(x => cleanBarcode(x.barcode).toLowerCase() === clean.toLowerCase());
-      barcodeMatch.value = found ? found.item_name : '';
-      return found ? found.item_name : '';
+      barcodeMatch.value = found ? found.barcode : '';
+      return found ? found.barcode : '';
     }
     function onBarcodeInput() {
       const name = lookupBarcode(invItem.barcode);
@@ -1009,6 +1143,22 @@ createApp({
       addInvItem();
       barcodeMatch.value = '';
     }
+    const showItemNameSuggestions = ref(false);
+    const itemNameSuggestions = computed(()=>{
+      const q = invItem.item_name.trim().toLowerCase();
+      if (!q) return [];
+      return db.item_database.filter(x => x.item_name.toLowerCase().includes(q) || x.barcode.toLowerCase().includes(q))
+        .sort((a,b) => a.barcode.localeCompare(b.barcode, 'ar'))
+        .slice(0,100);
+    });
+    function onItemNameInput() { showItemNameSuggestions.value = true; }
+    function hideItemNameSuggestions() { showItemNameSuggestions.value = false; }
+    function selectItemNameSuggestion(s) {
+      invItem.item_name = s.barcode;
+      invItem.barcode = s.barcode || '';
+      barcodeMatch.value = s.barcode;
+      showItemNameSuggestions.value = false;
+    }
     function startInvEdit(item){editInvId.value=item.id;Object.assign(editInvForm,{item_name:item.item_name,qty:item.qty,note:item.note||''});}
     function saveInvEdit(item){const i=db.inventory_items.find(x=>x.id===item.id);if(i){i.item_name=editInvForm.item_name;i.qty=editInvForm.qty;i.qty_remaining=editInvForm.qty;i.note=editInvForm.note;}editInvId.value=null;save();}
     function delInvItem(id){const idx=db.inventory_items.findIndex(x=>x.id===id);if(idx>-1){db.inventory_items.splice(idx,1);save();}}
@@ -1021,11 +1171,14 @@ createApp({
       });
       save(); showMsg(`✅ تم إرسال ${items.length} عنصر للتدقيق`);
     }
+    function finishInventory(){
+      if(!invPendingItems.value.length){showMsg('❌ لا توجد عناصر','a-danger');return;}
+      if(!window.confirm('تأكيد إنهاء الجرد وإرسال القائمة إلى مرحلة التدقيق؟')) return;
+      sendToAudit();
+    }
 
     // ─── AUDIT ───
     const aud = reactive({customer_code:'',list_sequence:''});
-    const transferItem = ref(null);
-    const tf = reactive({qty:1,destination:'',note:'',compensation_type:'full',price:0});
     const audSequences = computed(()=>{
       if(!aud.customer_code) return [];
       return [...new Set(db.audit_items.filter(a=>a.customer_code===aud.customer_code).map(a=>a.list_sequence))].map(s=>({list_sequence:s}));
@@ -1040,33 +1193,26 @@ createApp({
     function onProblemSelect(item){
       const pt=getPTInfo(item.selected_problem);
       if(!pt) return;
-      if(pt.auto){
-        setTimeout(()=>{
-          doAutoTransfer(item,pt.dest);
-        },100);
-      }
+      setTimeout(()=>{
+        sendToDecision(item,pt);
+      },100);
     }
-    function doAutoTransfer(item,dest){
+    function sendToDecision(item,pt){
       const qty=item.qty_remaining;
-      addToDestination(item,dest,qty,item.selected_problem,item.audit_note||'','full',item.price);
+      const dest=pt.auto?pt.dest:'';
+      queueDecision(item,dest,qty,item.selected_problem,item.audit_note||'','full',item.price);
       item.qty_remaining=0;
       save();
-      showMsg(`✅ تم نقل "${item.item_name}" إلى "${getDestLabel(dest)}"`);
+      showMsg(`⏳ "${item.item_name}" أُرسل إلى مرحلة القرار`);
     }
-    function openTransfer(item){
-      transferItem.value=item;
-      tf.qty=item.qty_remaining; tf.destination=''; tf.note=item.audit_note||''; tf.compensation_type='full'; tf.price=item.price||0;
-    }
-    function doTransfer(){
-      const item=transferItem.value;
-      const dest=tf.destination;
-      if(!dest){showMsg('❌ اختر الوجهة','a-danger');return;}
-      if(tf.qty<1||tf.qty>item.qty_remaining){showMsg('❌ كمية غير صحيحة','a-danger');return;}
-      addToDestination(item,dest,tf.qty,item.selected_problem,tf.note,tf.compensation_type,tf.price);
-      item.qty_remaining-=tf.qty;
-      if(item.qty_remaining===0) item.status='done';
-      save(); transferItem.value=null;
-      showMsg(`✅ تم نقل ${tf.qty} وحدة إلى "${getDestLabel(dest)}"`);
+    function queueDecision(item,dest,qty,problem_type,note,compensation_type,price){
+      db.decision_items.push({
+        id:nextId(db,'decision_items'),audit_item_id:item.id,
+        list_sequence:item.list_sequence,customer_code:item.customer_code,customer_name:item.customer_name,
+        item_name:item.item_name,qty:qty,price:price||0,problem_type:problem_type,
+        inspector_name:item.inspector_name,dest:dest,compensation_type:compensation_type||'full',
+        note:note||null,decision_note:'',added_date:TODAY()
+      });
     }
     function addToDestination(item,dest,qty,problem_type,note,compensation_type,price){
       const base={audit_item_id:item.id,list_sequence:item.list_sequence,customer_code:item.customer_code,customer_name:item.customer_name,item_name:item.item_name,qty:qty,problem_type:problem_type,inspector_name:item.inspector_name,note:note||null,added_date:TODAY()};
@@ -1074,6 +1220,41 @@ createApp({
       else if(dest==='damaged'){db.damaged_returns.push({id:nextId(db,'damaged_returns'),...base,price:price||0,compensation_type:compensation_type||'full'});}
       else if(dest==='customer_return'){db.customer_returns.push({id:nextId(db,'customer_returns'),...base});}
       else if(dest==='pending'){db.pending_items.push({id:nextId(db,'pending_items'),...base});}
+    }
+
+    // ─── DECISION STAGE ───
+    const dq = reactive({customer_code:'',list_sequence:''});
+    const dqSequences = computed(()=>{
+      if(!dq.customer_code) return [];
+      return [...new Set(db.decision_items.filter(d=>d.customer_code===dq.customer_code).map(d=>d.list_sequence))].map(s=>({list_sequence:s}));
+    });
+    const decisionItems = computed(()=>db.decision_items.filter(d=>{
+      if(dq.customer_code&&d.customer_code!==dq.customer_code) return false;
+      if(dq.list_sequence&&d.list_sequence!==dq.list_sequence) return false;
+      return true;
+    }));
+    function onDQCustomer(){dq.list_sequence='';}
+    function approveDecision(d){
+      if(!d.dest){showMsg('❌ اختر الوجهة أولاً','a-danger');return;}
+      const finalNote = d.decision_note ? (d.note ? `${d.note} | قرار: ${d.decision_note}` : `قرار: ${d.decision_note}`) : d.note;
+      addToDestination({id:d.audit_item_id,list_sequence:d.list_sequence,customer_code:d.customer_code,customer_name:d.customer_name,item_name:d.item_name,inspector_name:d.inspector_name},d.dest,d.qty,d.problem_type,finalNote,d.compensation_type,d.price);
+      const idx=db.decision_items.findIndex(x=>x.id===d.id);
+      if(idx>-1) db.decision_items.splice(idx,1);
+      save();
+      showMsg(`✅ تمت الموافقة ونقل "${d.item_name}" إلى "${getDestLabel(d.dest)}"`);
+    }
+    function rejectDecision(d){
+      if(!confirm('رفض هذا القرار وإعادة العنصر للتدقيق؟')) return;
+      const ai=db.audit_items.find(a=>a.id===d.audit_item_id);
+      if(ai){
+        ai.qty_remaining+=d.qty;
+        ai.selected_problem='';
+        ai.audit_note=d.decision_note?`❌ مرفوض: ${d.decision_note}`:'❌ مرفوض';
+      }
+      const idx=db.decision_items.findIndex(x=>x.id===d.id);
+      if(idx>-1) db.decision_items.splice(idx,1);
+      save();
+      showMsg(`↩️ تم رفض "${d.item_name}" وإعادته للتدقيق`);
     }
     function restoreItem(source,item){
       if(!confirm('إعادة العنصر إلى التدقيق؟')) return;
@@ -1218,6 +1399,7 @@ createApp({
 
     // ─── ITEM DATABASE ───
     if (!db.item_database) { db.item_database = []; db.counters.item_database = 0; save(); }
+    if (!db.decision_items) { db.decision_items = []; db.counters.decision_items = 0; save(); }
     const itemDbSearch = ref('');
     const itemImportResult = ref(null);
     const newItemDb = reactive({barcode:'', item_name:''});
@@ -1304,18 +1486,20 @@ createApp({
     }
 
     // ─── ADMIN ───
-    const newUser = reactive({username:'',password:'',full_name:'',role:'reception'});
+    const newUser = reactive({username:'',password:'',full_name:'',roles:['reception']});
     const editUserId = ref(null); const editUserForm = reactive({});
     function addUser(){
       if(!newUser.username||!newUser.password||!newUser.full_name){showMsg('❌ يرجى ملء الحقول المطلوبة','a-danger');return;}
+      if(!newUser.roles.length){showMsg('❌ يرجى اختيار دور واحد على الأقل','a-danger');return;}
       if(db.users.find(u=>u.username===newUser.username)){showMsg('❌ اسم المستخدم موجود','a-danger');return;}
       db.users.push({id:nextId(db,'users'),...JSON.parse(JSON.stringify(newUser))});
-      save(); newUser.username=''; newUser.password=''; newUser.full_name=''; newUser.role='reception'; showMsg('✅ تمت إضافة المستخدم');
+      save(); newUser.username=''; newUser.password=''; newUser.full_name=''; newUser.roles=['reception']; showMsg('✅ تمت إضافة المستخدم');
     }
-    function startUserEdit(u){editUserId.value=u.id;Object.assign(editUserForm,{full_name:u.full_name,role:u.role,password:''});}
+    function startUserEdit(u){editUserId.value=u.id;Object.assign(editUserForm,{full_name:u.full_name,roles:[...u.roles],password:''});}
     function saveUserEdit(u){
+      if(!editUserForm.roles.length){showMsg('❌ يرجى اختيار دور واحد على الأقل','a-danger');return;}
       const i=db.users.find(x=>x.id===u.id);
-      if(i){i.full_name=editUserForm.full_name;i.role=editUserForm.role;if(editUserForm.password)i.password=editUserForm.password;}
+      if(i){i.full_name=editUserForm.full_name;i.roles=[...editUserForm.roles];if(editUserForm.password)i.password=editUserForm.password;}
       editUserId.value=null;save();showMsg('✅ تم التحديث');
       if(u.id===currentUser.value.id){currentUser.value={...i};sessionStorage.setItem('rs_user',JSON.stringify(currentUser.value));}
     }
@@ -1326,6 +1510,7 @@ createApp({
       ['استلام الراجع',true,true,true,false,false],
       ['الجرد',true,false,true,false,false],
       ['التدقيق',true,false,false,true,true],
+      ['مرحلة القرار',true,false,false,true,true],
       ['الراجع الشغال',true,false,false,true,true],
       ['الراجع التالف',true,false,false,true,true],
       ['راجع للزبون',true,false,false,true,true],
@@ -1348,12 +1533,13 @@ createApp({
     return {
       db,currentUser,page,globalMsg,globalMsgType,
       loginForm,loginErr,doLogin,logout,
-      can,nav,roleLabel,PROBLEM_TYPES,ROLES,ROLE_COLORS,permTable,
+      can,nav,roleLabel,PROBLEM_TYPES,ROLES,ROLE_COLORS,DEST_COLORS,permTable,
       getPTInfo,getPTColor,getDestLabel,
       r1,r1f,lastReception,onR1Customer,addReception,filteredReceptions,printLabel,
       inv,invItem,invSequences,invCustomer,invItems,invPendingItems,editInvId,editInvForm,
-      onInvCustomer,addInvItem,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,
-      aud,audSequences,auditItems,transferItem,tf,onAudCustomer,onProblemSelect,openTransfer,doTransfer,restoreItem,
+      onInvCustomer,addInvItem,receiptDateOf,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,finishInventory,
+      aud,audSequences,auditItems,onAudCustomer,onProblemSelect,restoreItem,
+      dq,dqSequences,decisionItems,onDQCustomer,approveDecision,rejectDecision,
       wf,wfSequences,filteredWorking,editWId,editWForm,onWFCustomer,startWEdit,saveWEdit,
       dmf,dmfSequences,filteredDamaged,editDId,editDForm,onDMFCustomer,startDEdit,saveDEdit,
       crf,crfSequences,filteredCR,onCRFCustomer,
@@ -1362,11 +1548,14 @@ createApp({
       itemDbSearch,filteredItemDb,itemImportResult,newItemDb,editItemDbId,editItemDbForm,
       importItemDatabase,addItemDb,startItemDbEdit,saveItemDbEdit,delItemDb,clearItemDb,exportItemDb,
       barcodeMatch,onBarcodeInput,
+      showItemNameSuggestions,itemNameSuggestions,onItemNameInput,hideItemNameSuggestions,selectItemNameSuggestion,
       newUser,editUserId,editUserForm,addUser,startUserEdit,saveUserEdit,delUser,
       exportTable,print,
     };
   }
 }).mount('#app');
+
+})();
 </script>
 </body>
 </html>

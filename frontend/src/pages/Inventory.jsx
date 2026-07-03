@@ -5,15 +5,20 @@ export default function Inventory() {
   const [customers, setCustomers] = useState([]);
   const [sequences, setSequences] = useState([]);
   const [items, setItems] = useState([]);
+  const [inspectors, setInspectors] = useState([]);
   const [filter, setFilter] = useState({ customer_code: '', list_sequence: '' });
   const [form, setForm] = useState({ item_name: '', qty: 1, barcode: '', note: '' });
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [msg, setMsg] = useState('');
   const [inspector, setInspector] = useState('');
+  const [nameSuggestions, setNameSuggestions] = useState([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
   const barcodeRef = useRef();
+  const nameSearchTimer = useRef();
 
   useEffect(() => { axios.get('/api/customers').then(r => setCustomers(r.data)); }, []);
+  useEffect(() => { axios.get('/api/users/list').then(r => setInspectors(r.data)); }, []);
 
   const loadSequences = (code) => {
     if (!code) return;
@@ -47,6 +52,21 @@ export default function Inventory() {
       loadItems();
       barcodeRef.current?.focus();
     } catch (e) { setMsg('❌ ' + (e.response?.data?.error || 'خطأ')); }
+  };
+
+  const onItemNameInput = (name) => {
+    setForm(f => ({...f, item_name: name}));
+    setShowNameSuggestions(true);
+    clearTimeout(nameSearchTimer.current);
+    if (!name.trim()) { setNameSuggestions([]); return; }
+    nameSearchTimer.current = setTimeout(() => {
+      axios.get(`/api/inventory/item-names?q=${encodeURIComponent(name.trim())}`).then(r => setNameSuggestions(r.data));
+    }, 250);
+  };
+
+  const selectNameSuggestion = (s) => {
+    setForm(f => ({...f, item_name: s.item_name, barcode: f.barcode || s.barcode || ''}));
+    setShowNameSuggestions(false);
   };
 
   const handleBarcodeScan = (e) => {
@@ -115,7 +135,10 @@ export default function Inventory() {
           </div>
           <div className="form-group">
             <label>اسم مسؤول الجرد</label>
-            <input value={inspector} onChange={e => setInspector(e.target.value)} placeholder="اسم المسؤول" />
+            <select value={inspector} onChange={e => setInspector(e.target.value)}>
+              <option value="">اختر المسؤول</option>
+              {inspectors.map(u => <option key={u.id} value={u.full_name}>{u.full_name}</option>)}
+            </select>
           </div>
         </div>
         {selectedCustomer && filter.list_sequence && (
@@ -139,7 +162,19 @@ export default function Inventory() {
             </div>
             <div className="form-group">
               <label>اسم العنصر *</label>
-              <input value={form.item_name} onChange={e => setForm({...form, item_name: e.target.value})} placeholder="اسم المنتج" />
+              <input value={form.item_name} onChange={e => onItemNameInput(e.target.value)}
+                onFocus={() => onItemNameInput(form.item_name)}
+                onBlur={() => setTimeout(() => setShowNameSuggestions(false), 150)}
+                placeholder="اكتب اسم المنتج أو ابحث..." autoComplete="off" />
+              {showNameSuggestions && nameSuggestions.length > 0 && (
+                <div className="ac-list">
+                  {nameSuggestions.map((s, i) => (
+                    <div key={i} className="ac-item" onMouseDown={e => { e.preventDefault(); selectNameSuggestion(s); }}>
+                      {s.item_name}{s.barcode && <small>{s.barcode}</small>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label>الكمية *</label>
