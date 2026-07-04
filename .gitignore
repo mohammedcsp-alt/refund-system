@@ -5,3 +5,4 @@ sync-server/data/
 *.log
 npm-debug.log*
 .claude/
+backend/*.db

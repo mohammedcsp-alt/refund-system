@@ -29,6 +29,16 @@ export default function Audit() {
   const [msg, setMsg] = useState('');
   const [transferModal, setTransferModal] = useState(null);
   const [transferForm, setTransferForm] = useState({ qty: 1, destination: '', note: '', compensation_type: 'full', price: 0 });
+  const [editQtys, setEditQtys] = useState({});
+
+  const getEditQty = (item) => {
+    const v = editQtys[item.id];
+    return v === undefined ? item.qty_remaining : v;
+  };
+
+  const clearEditQty = (itemId) => {
+    setEditQtys(prev => { const cp = { ...prev }; delete cp[itemId]; return cp; });
+  };
 
   useEffect(() => { axios.get('/api/customers').then(r => setCustomers(r.data)); }, []);
 
@@ -48,7 +58,7 @@ export default function Audit() {
 
   const openTransfer = (item) => {
     setTransferModal(item);
-    setTransferForm({ qty: item.qty_remaining, destination: '', note: '', compensation_type: 'full', price: item.price || 0 });
+    setTransferForm({ qty: getEditQty(item), destination: '', note: '', compensation_type: 'full', price: item.price || 0 });
   };
 
   const doTransfer = async () => {
@@ -65,6 +75,7 @@ export default function Audit() {
       });
       setTransferModal(null);
       setMsg(`✅ تم نقل ${qty} وحدة إلى "${DEST_LABELS[dest]}"`);
+      clearEditQty(item.id);
       load();
     } catch (e) { setMsg('❌ ' + (e.response?.data?.error || 'خطأ')); }
   };
@@ -72,13 +83,16 @@ export default function Audit() {
   const autoTransfer = async (item) => {
     const pt = getProblemType(item.problem_type);
     if (!pt?.auto || !item.problem_type) return;
+    const qty = +getEditQty(item);
+    if (qty < 1 || qty > item.qty_remaining) return setMsg('❌ كمية غير صحيحة');
     try {
       await axios.post('/api/audit/transfer', {
-        audit_item_id: item.id, qty: item.qty_remaining,
+        audit_item_id: item.id, qty,
         problem_type: item.problem_type, destination: pt.dest,
         note: item.note, compensation_type: 'full', price: item.price
       });
-      setMsg(`✅ تم نقل "${item.item_name}" إلى "${DEST_LABELS[pt.dest]}"`);
+      setMsg(`✅ تم نقل ${qty} من "${item.item_name}" إلى "${DEST_LABELS[pt.dest]}"`);
+      clearEditQty(item.id);
       load();
     } catch (e) { setMsg('❌ ' + (e.response?.data?.error || 'خطأ')); }
   };
@@ -133,7 +147,7 @@ export default function Audit() {
         <div className="card">
           <div className="card-title">عناصر التدقيق ({items.length})</div>
           <div className="alert alert-info">
-            ملاحظة: يمكن تقسيم الكمية - أدخل كمية جزئية وسيبقى الباقي في التدقيق
+            ملاحظة: يمكن تقسيم الكمية - عدّل قيمة "المتبقية" لتحديد كمية جزئية قبل اختيار نوع المشكلة، وسيبقى الباقي في التدقيق لاختيار خيار مختلف له
           </div>
           <div className="table-wrapper">
             <table>
@@ -150,7 +164,12 @@ export default function Audit() {
                       <td>{i+1}</td>
                       <td><strong>{item.item_name}</strong></td>
                       <td>{item.qty_original}</td>
-                      <td><strong style={{color:'var(--primary)'}}>{item.qty_remaining}</strong></td>
+                      <td>
+                        <input type="number" min="1" max={item.qty_remaining} value={getEditQty(item)}
+                          onChange={e => setEditQtys({ ...editQtys, [item.id]: e.target.value })}
+                          style={{width:'70px', fontWeight:'bold', color:'var(--primary)'}} />
+                        <div style={{fontSize:'0.7rem', color:'var(--muted)'}}>من {item.qty_remaining}</div>
+                      </td>
                       <td>{item.receipt_date || '-'}</td>
                       <td>{item.count_date || '-'}</td>
                       <td><span className="badge badge-blue">{item.list_sequence}</span></td>

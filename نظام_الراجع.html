@@ -231,11 +231,15 @@ tfoot tr{background:#f5f9ff;font-weight:700}
       <div class="card no-print">
         <div class="card-title">إضافة استلام جديد</div>
         <div class="fgrid">
-          <div class="fg"><label>الزبون *</label>
-            <select v-model="r1.customer_code" @change="onR1Customer">
-              <option value="">اختر الزبون</option>
-              <option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
-            </select>
+          <div class="fg">
+            <label>الزبون * (بالاسم أو الرمز)</label>
+            <input v-model="r1CustomerSearch" @input="onR1CustomerSearch" @focus="onR1CustomerSearch" @click="onR1CustomerSearch" @blur="hideR1CustomerSuggestions"
+              placeholder="ابحث بالاسم أو الرمز..." autocomplete="off">
+            <div v-if="showR1CustomerSuggestions && r1CustomerSuggestions.length" class="ac-list">
+              <div v-for="c in r1CustomerSuggestions" :key="c.id" class="ac-item" @mousedown.prevent="selectR1Customer(c)">
+                {{c.name}}<small>{{c.customer_code}}</small>
+              </div>
+            </div>
           </div>
           <div class="fg"><label>اسم المستلم *</label>
             <select v-model="r1.receiver_name">
@@ -257,7 +261,17 @@ tfoot tr{background:#f5f9ff;font-weight:700}
       <div class="card">
         <div class="card-title no-print">سجلات الاستلام</div>
         <div class="fbar no-print">
-          <div class="fg"><label>الزبون</label><select v-model="r1f.customer_code"><option value="">الكل</option><option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}}</option></select></div>
+          <div class="fg">
+            <label>الزبون (بالاسم أو الرمز)</label>
+            <input v-model="r1fCustomerSearch" @input="onR1fCustomerSearch" @focus="onR1fCustomerSearch" @click="onR1fCustomerSearch" @blur="hideR1fCustomerSuggestions"
+              placeholder="-- الكل --" autocomplete="off">
+            <div v-if="showR1fCustomerSuggestions" class="ac-list">
+              <div class="ac-item" @mousedown.prevent="clearR1fCustomer">-- الكل --</div>
+              <div v-for="c in r1fCustomerSuggestions" :key="c.id" class="ac-item" @mousedown.prevent="selectR1fCustomer(c)">
+                {{c.name}}<small>{{c.customer_code}}</small>
+              </div>
+            </div>
+          </div>
           <div class="fg"><label>من تاريخ</label><input type="date" v-model="r1f.date_from"></div>
           <div class="fg"><label>إلى تاريخ</label><input type="date" v-model="r1f.date_to"></div>
         </div>
@@ -291,11 +305,15 @@ tfoot tr{background:#f5f9ff;font-weight:700}
       <div class="card no-print">
         <div class="card-title">اختيار الزبون والتسلسل</div>
         <div class="fgrid">
-          <div class="fg"><label>الزبون *</label>
-            <select v-model="inv.customer_code" @change="onInvCustomer">
-              <option value="">اختر الزبون</option>
-              <option v-for="c in invCustomers" :key="c.customer_code" :value="c.customer_code">{{c.name}} ({{c.customer_code}})</option>
-            </select>
+          <div class="fg">
+            <label>الزبون * (بالاسم أو الرمز)</label>
+            <input v-model="invCustomerSearch" @input="onInvCustomerSearch" @focus="onInvCustomerSearch" @click="onInvCustomerSearch" @blur="hideInvCustomerSuggestions"
+              placeholder="ابحث بالاسم أو الرمز..." autocomplete="off">
+            <div v-if="showInvCustomerSuggestions && invCustomerSuggestions.length" class="ac-list">
+              <div v-for="c in invCustomerSuggestions" :key="c.customer_code" class="ac-item" @mousedown.prevent="selectInvCustomer(c)">
+                {{c.name}}<small>{{c.customer_code}}</small>
+              </div>
+            </div>
           </div>
           <div class="fg"><label>تسلسل القائمة *</label>
             <select v-model="inv.list_sequence">
@@ -423,20 +441,28 @@ tfoot tr{background:#f5f9ff;font-weight:700}
 
       <div v-if="auditItems.length>0" class="card">
         <div class="card-title">عناصر التدقيق ({{auditItems.length}})</div>
-        <div class="alert a-info">ملاحظة: اختر نوع المشكلة لكل عنصر، ثم اضغط "إنهاء التدقيق" لإرسال القائمة كاملة إلى مرحلة القرار</div>
-        <button class="btn btn-success no-print" @click="finishAudit">🏁 إنهاء التدقيق ونقل القائمة إلى القرار</button>
+        <div class="alert a-info">ملاحظة: يمكن تقسيم الكمية - عدّل قيمة "المتبقية" لتحديد كمية جزئية قبل اختيار نوع المشكلة، وسيتم إرسالها فوراً وسيبقى الباقي في التدقيق لاختيار خيار مختلف له</div>
         <div class="tbl-wrap">
           <table>
-            <thead><tr><th>#</th><th>اسم العنصر</th><th>الأصلية</th><th>المتبقية</th><th>تاريخ الاستلام</th><th>تاريخ الجرد</th><th>تسلسل القائمة</th><th>نوع المشكلة</th><th>ملاحظة</th></tr></thead>
+            <thead><tr><th>#</th><th>اسم العنصر</th><th>الأصلية</th><th>المتبقية</th><th>تاريخ الاستلام</th><th>تاريخ الجرد</th><th>تسلسل القائمة</th><th>كشف تاريخ</th><th>نوع المشكلة</th><th>ملاحظة</th></tr></thead>
             <tbody>
               <tr v-for="(item,i) in auditItems" :key="item.id">
                 <td>{{i+1}}</td>
                 <td><strong>{{item.item_name}}</strong></td>
                 <td>{{item.qty_original}}</td>
-                <td><strong style="color:var(--blue)">{{item.qty_remaining}}</strong></td>
+                <td>
+                  <input type="number" min="1" :max="item.qty_remaining"
+                    :value="item.qty_to_send===undefined?item.qty_remaining:item.qty_to_send"
+                    @input="e=>item.qty_to_send=Math.max(1,Math.min(+e.target.value||1,item.qty_remaining))"
+                    style="width:70px;font-weight:bold;color:var(--blue)">
+                  <div style="font-size:.7rem;color:#78909c">من {{item.qty_remaining}}</div>
+                </td>
                 <td>{{item.receipt_date||'-'}}</td>
                 <td>{{item.count_date||'-'}}</td>
                 <td><span class="badge b-blue">{{item.list_sequence}}</span></td>
+                <td>
+                  <input type="date" v-model="item.exam_date" @change="save()" style="min-width:140px;font-size:.8rem">
+                </td>
                 <td>
                   <select v-model="item.selected_problem" @change="onProblemSelect(item)" style="min-width:210px;font-size:.8rem">
                     <option value="">-- اختر نوع المشكلة --</option>
@@ -524,7 +550,14 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         <div class="gap"><button class="btn btn-secondary btn-sm" @click="exportTable('working_returns')">📊 تصدير</button><button class="btn btn-outline btn-sm" @click="print()">🖨️ طباعة</button></div>
       </div>
       <div class="card no-print"><div class="fbar" style="padding:0;background:none;border:none">
-        <div class="fg"><label>الزبون</label><select v-model="wf.customer_code" @change="onWFCustomer"><option value="">الكل</option><option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}}</option></select></div>
+        <div class="fg">
+          <label>الزبون (بالاسم أو الرمز)</label>
+          <input v-model="wfCustomerSearch" @input="onWfCustomerSearch" @focus="onWfCustomerSearch" @click="onWfCustomerSearch" @blur="hideWfCustomerSuggestions" placeholder="-- الكل --" autocomplete="off">
+          <div v-if="showWfCustomerSuggestions" class="ac-list">
+            <div class="ac-item" @mousedown.prevent="clearWfCustomer">-- الكل --</div>
+            <div v-for="c in wfCustomerSuggestions" :key="c.id" class="ac-item" @mousedown.prevent="selectWfCustomer(c)">{{c.name}}<small>{{c.customer_code}}</small></div>
+          </div>
+        </div>
         <div class="fg"><label>التسلسل</label><select v-model="wf.list_sequence"><option value="">الكل</option><option v-for="s in wfSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}}</option></select></div>
         <div class="fg"><label>من تاريخ</label><input type="date" v-model="wf.date_from"></div>
         <div class="fg"><label>إلى تاريخ</label><input type="date" v-model="wf.date_to"></div>
@@ -569,7 +602,14 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         <div class="gap"><button class="btn btn-secondary btn-sm" @click="exportTable('damaged_returns')">📊 تصدير</button><button class="btn btn-outline btn-sm" @click="print()">🖨️ طباعة</button></div>
       </div>
       <div class="card no-print"><div class="fbar" style="padding:0;background:none;border:none">
-        <div class="fg"><label>الزبون</label><select v-model="dmf.customer_code" @change="onDMFCustomer"><option value="">الكل</option><option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}}</option></select></div>
+        <div class="fg">
+          <label>الزبون (بالاسم أو الرمز)</label>
+          <input v-model="dmfCustomerSearch" @input="onDmfCustomerSearch" @focus="onDmfCustomerSearch" @click="onDmfCustomerSearch" @blur="hideDmfCustomerSuggestions" placeholder="-- الكل --" autocomplete="off">
+          <div v-if="showDmfCustomerSuggestions" class="ac-list">
+            <div class="ac-item" @mousedown.prevent="clearDmfCustomer">-- الكل --</div>
+            <div v-for="c in dmfCustomerSuggestions" :key="c.id" class="ac-item" @mousedown.prevent="selectDmfCustomer(c)">{{c.name}}<small>{{c.customer_code}}</small></div>
+          </div>
+        </div>
         <div class="fg"><label>التسلسل</label><select v-model="dmf.list_sequence"><option value="">الكل</option><option v-for="s in dmfSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}}</option></select></div>
         <div class="fg"><label>من تاريخ</label><input type="date" v-model="dmf.date_from"></div>
         <div class="fg"><label>إلى تاريخ</label><input type="date" v-model="dmf.date_to"></div>
@@ -613,7 +653,14 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         <div class="gap"><button class="btn btn-secondary btn-sm" @click="exportTable('customer_returns')">📊 تصدير</button><button class="btn btn-outline btn-sm" @click="print()">🖨️ طباعة</button></div>
       </div>
       <div class="card no-print"><div class="fbar" style="padding:0;background:none;border:none">
-        <div class="fg"><label>الزبون</label><select v-model="crf.customer_code" @change="onCRFCustomer"><option value="">الكل</option><option v-for="c in db.customers" :key="c.id" :value="c.customer_code">{{c.name}}</option></select></div>
+        <div class="fg">
+          <label>الزبون (بالاسم أو الرمز)</label>
+          <input v-model="crfCustomerSearch" @input="onCrfCustomerSearch" @focus="onCrfCustomerSearch" @click="onCrfCustomerSearch" @blur="hideCrfCustomerSuggestions" placeholder="-- الكل --" autocomplete="off">
+          <div v-if="showCrfCustomerSuggestions" class="ac-list">
+            <div class="ac-item" @mousedown.prevent="clearCrfCustomer">-- الكل --</div>
+            <div v-for="c in crfCustomerSuggestions" :key="c.id" class="ac-item" @mousedown.prevent="selectCrfCustomer(c)">{{c.name}}<small>{{c.customer_code}}</small></div>
+          </div>
+        </div>
         <div class="fg"><label>التسلسل</label><select v-model="crf.list_sequence"><option value="">الكل</option><option v-for="s in crfSequences" :key="s.list_sequence" :value="s.list_sequence">{{s.list_sequence}}</option></select></div>
         <div class="fg"><label>من تاريخ</label><input type="date" v-model="crf.date_from"></div>
         <div class="fg"><label>إلى تاريخ</label><input type="date" v-model="crf.date_to"></div>
@@ -1082,7 +1129,43 @@ createApp({
     const r1 = reactive({customer_code:'',customer_name:'',receiver_name:'',receipt_date:TODAY(),carton_qty:0,piece_qty:0});
     const r1f = reactive({customer_code:'',date_from:'',date_to:''});
     const lastReception = ref(null);
-    function onR1Customer() { const c=db.customers.find(x=>x.customer_code===r1.customer_code); r1.customer_name=c?.name||''; }
+    const r1CustomerSearch = ref('');
+    const showR1CustomerSuggestions = ref(false);
+    const r1CustomerSuggestions = computed(()=>{
+      const q=r1CustomerSearch.value.trim().toLowerCase();
+      if(!q) return db.customers;
+      return db.customers.filter(c=>c.name.toLowerCase().includes(q)||c.customer_code.toLowerCase().includes(q));
+    });
+    function onR1CustomerSearch() { showR1CustomerSuggestions.value = true; }
+    function hideR1CustomerSuggestions() { showR1CustomerSuggestions.value = false; }
+    function selectR1Customer(c) {
+      r1.customer_code = c.customer_code;
+      r1.customer_name = c.name;
+      r1CustomerSearch.value = `${c.name} (${c.customer_code})`;
+      showR1CustomerSuggestions.value = false;
+    }
+    const r1fCustomerSearch = ref('');
+    const showR1fCustomerSuggestions = ref(false);
+    const r1fCustomerSuggestions = computed(()=>{
+      const q=r1fCustomerSearch.value.trim().toLowerCase();
+      if(!q) return db.customers;
+      return db.customers.filter(c=>c.name.toLowerCase().includes(q)||c.customer_code.toLowerCase().includes(q));
+    });
+    function onR1fCustomerSearch() {
+      showR1fCustomerSuggestions.value = true;
+      if (!r1fCustomerSearch.value.trim()) r1f.customer_code = '';
+    }
+    function hideR1fCustomerSuggestions() { showR1fCustomerSuggestions.value = false; }
+    function selectR1fCustomer(c) {
+      r1f.customer_code = c.customer_code;
+      r1fCustomerSearch.value = `${c.name} (${c.customer_code})`;
+      showR1fCustomerSuggestions.value = false;
+    }
+    function clearR1fCustomer() {
+      r1f.customer_code = '';
+      r1fCustomerSearch.value = '';
+      showR1fCustomerSuggestions.value = false;
+    }
     function addReception() {
       if(!r1.customer_code||!r1.receiver_name){showMsg('❌ يرجى ملء الحقول المطلوبة','a-danger');return;}
       const dateStr=r1.receipt_date.replace(/-/g,'');
@@ -1128,6 +1211,21 @@ createApp({
     const invItems = computed(()=>db.inventory_items.filter(i=>i.list_sequence===inv.list_sequence&&i.customer_code===inv.customer_code&&i.status==='pending_send'));
     const invPendingItems = computed(()=>invItems.value.filter(i=>i.status==='pending_send'));
     function onInvCustomer() { inv.list_sequence=''; }
+    const invCustomerSearch = ref('');
+    const showInvCustomerSuggestions = ref(false);
+    const invCustomerSuggestions = computed(()=>{
+      const q=invCustomerSearch.value.trim().toLowerCase();
+      if(!q) return invCustomers.value;
+      return invCustomers.value.filter(c=>c.name.toLowerCase().includes(q)||c.customer_code.toLowerCase().includes(q));
+    });
+    function onInvCustomerSearch() { showInvCustomerSuggestions.value = true; }
+    function hideInvCustomerSuggestions() { showInvCustomerSuggestions.value = false; }
+    function selectInvCustomer(c) {
+      inv.customer_code = c.customer_code;
+      invCustomerSearch.value = `${c.name} (${c.customer_code})`;
+      showInvCustomerSuggestions.value = false;
+      onInvCustomer();
+    }
     function receiptDateOf(item) {
       if (item.receipt_date) return item.receipt_date;
       const rec = db.receptions.find(r=>r.list_sequence===item.list_sequence);
@@ -1199,7 +1297,7 @@ createApp({
       const items=invPendingItems.value;
       if(!items.length){showMsg('❌ لا توجد عناصر','a-danger');return;}
       items.forEach(item=>{
-        const ai={id:nextId(db,'audit_items'),inventory_item_id:item.id,list_sequence:item.list_sequence,customer_code:item.customer_code,customer_name:item.customer_name,item_name:item.item_name,qty_original:item.qty_remaining,qty_remaining:item.qty_remaining,price:item.price,receipt_date:item.receipt_date,count_date:item.count_date,audit_date:TODAY(),problem_type:null,note:null,inspector_name:inv.inspector||null,selected_problem:''};
+        const ai={id:nextId(db,'audit_items'),inventory_item_id:item.id,list_sequence:item.list_sequence,customer_code:item.customer_code,customer_name:item.customer_name,item_name:item.item_name,qty_original:item.qty_remaining,qty_remaining:item.qty_remaining,price:item.price,receipt_date:item.receipt_date,count_date:item.count_date,audit_date:TODAY(),problem_type:null,note:null,inspector_name:inv.inspector||null,selected_problem:'',exam_date:''};
         db.audit_items.push(ai); item.status='pending_audit';
       });
       save(); showMsg(`✅ تم إرسال ${items.length} عنصر للتدقيق`);
@@ -1232,28 +1330,22 @@ createApp({
     });
     function onAudCustomer(){aud.list_sequence='';}
     function onProblemSelect(item){
-      save();
+      const pt=getPTInfo(item.selected_problem);
+      if(!pt) return;
+      const qty=Math.max(1,Math.min(+(item.qty_to_send)||item.qty_remaining,item.qty_remaining));
+      const destLabel=pt.auto?getDestLabel(pt.dest):'مرحلة القرار';
+      sendToDecision(item,pt,qty);
+      showMsg(`✅ تم إرسال ${qty} من "${item.item_name}" إلى "${destLabel}"`);
+      item.audit_note='';
+      item.qty_to_send=item.qty_remaining;
+      // deferred: native <select> v-model re-applies the picked option to the
+      // model right after this handler runs, so reset it on the next tick
+      nextTick(()=>{ item.selected_problem=''; save(); });
     }
-    function sendToDecision(item,pt){
-      const qty=item.qty_remaining;
+    function sendToDecision(item,pt,qty){
       const dest=pt.auto?pt.dest:'';
       queueDecision(item,dest,qty,item.selected_problem,item.audit_note||'','full',item.price);
-      item.qty_remaining=0;
-    }
-    function finishAudit(){
-      const items=auditItems.value;
-      if(items.length===0) return;
-      const missing=items.filter(it=>!it.selected_problem);
-      if(missing.length>0){
-        showMsg(`❌ يرجى اختيار نوع المشكلة لكل العناصر قبل الإنهاء (متبقي ${missing.length})`,'a-danger');
-        return;
-      }
-      items.forEach(item=>{
-        const pt=getPTInfo(item.selected_problem);
-        sendToDecision(item,pt);
-      });
-      save();
-      showMsg(`⏳ تم إرسال القائمة كاملة (${items.length}) إلى مرحلة القرار`);
+      item.qty_remaining-=qty;
     }
     function queueDecision(item,dest,qty,problem_type,note,compensation_type,price){
       db.decision_items.push({
@@ -1336,6 +1428,17 @@ createApp({
       return true;
     }));
     function onWFCustomer(){wf.list_sequence='';}
+    const wfCustomerSearch = ref('');
+    const showWfCustomerSuggestions = ref(false);
+    const wfCustomerSuggestions = computed(()=>{
+      const q=wfCustomerSearch.value.trim().toLowerCase();
+      if(!q) return db.customers;
+      return db.customers.filter(c=>c.name.toLowerCase().includes(q)||c.customer_code.toLowerCase().includes(q));
+    });
+    function onWfCustomerSearch() { showWfCustomerSuggestions.value = true; if(!wfCustomerSearch.value.trim()) wf.customer_code=''; }
+    function hideWfCustomerSuggestions() { showWfCustomerSuggestions.value = false; }
+    function selectWfCustomer(c) { wf.customer_code=c.customer_code; wfCustomerSearch.value=`${c.name} (${c.customer_code})`; showWfCustomerSuggestions.value=false; onWFCustomer(); }
+    function clearWfCustomer() { wf.customer_code=''; wfCustomerSearch.value=''; showWfCustomerSuggestions.value=false; onWFCustomer(); }
     function startWEdit(item){editWId.value=item.id;Object.assign(editWForm,{price:item.price,note:item.note||''});}
     function saveWEdit(item){const i=db.working_returns.find(x=>x.id===item.id);if(i){i.price=editWForm.price;i.note=editWForm.note;}editWId.value=null;save();}
 
@@ -1351,6 +1454,17 @@ createApp({
       return true;
     }));
     function onDMFCustomer(){dmf.list_sequence='';}
+    const dmfCustomerSearch = ref('');
+    const showDmfCustomerSuggestions = ref(false);
+    const dmfCustomerSuggestions = computed(()=>{
+      const q=dmfCustomerSearch.value.trim().toLowerCase();
+      if(!q) return db.customers;
+      return db.customers.filter(c=>c.name.toLowerCase().includes(q)||c.customer_code.toLowerCase().includes(q));
+    });
+    function onDmfCustomerSearch() { showDmfCustomerSuggestions.value = true; if(!dmfCustomerSearch.value.trim()) dmf.customer_code=''; }
+    function hideDmfCustomerSuggestions() { showDmfCustomerSuggestions.value = false; }
+    function selectDmfCustomer(c) { dmf.customer_code=c.customer_code; dmfCustomerSearch.value=`${c.name} (${c.customer_code})`; showDmfCustomerSuggestions.value=false; onDMFCustomer(); }
+    function clearDmfCustomer() { dmf.customer_code=''; dmfCustomerSearch.value=''; showDmfCustomerSuggestions.value=false; onDMFCustomer(); }
     function startDEdit(item){editDId.value=item.id;Object.assign(editDForm,{price:item.price,compensation_type:item.compensation_type,note:item.note||''});}
     function saveDEdit(item){const i=db.damaged_returns.find(x=>x.id===item.id);if(i){i.price=editDForm.price;i.compensation_type=editDForm.compensation_type;i.note=editDForm.note;}editDId.value=null;save();}
 
@@ -1365,6 +1479,17 @@ createApp({
       return true;
     }));
     function onCRFCustomer(){crf.list_sequence='';}
+    const crfCustomerSearch = ref('');
+    const showCrfCustomerSuggestions = ref(false);
+    const crfCustomerSuggestions = computed(()=>{
+      const q=crfCustomerSearch.value.trim().toLowerCase();
+      if(!q) return db.customers;
+      return db.customers.filter(c=>c.name.toLowerCase().includes(q)||c.customer_code.toLowerCase().includes(q));
+    });
+    function onCrfCustomerSearch() { showCrfCustomerSuggestions.value = true; if(!crfCustomerSearch.value.trim()) crf.customer_code=''; }
+    function hideCrfCustomerSuggestions() { showCrfCustomerSuggestions.value = false; }
+    function selectCrfCustomer(c) { crf.customer_code=c.customer_code; crfCustomerSearch.value=`${c.name} (${c.customer_code})`; showCrfCustomerSuggestions.value=false; onCRFCustomer(); }
+    function clearCrfCustomer() { crf.customer_code=''; crfCustomerSearch.value=''; showCrfCustomerSuggestions.value=false; onCRFCustomer(); }
 
     // ─── PENDING ITEMS ───
     const pf = reactive({customer_code:'',list_sequence:'',date_from:'',date_to:''});
@@ -1589,18 +1714,24 @@ createApp({
     function print(){window.print();}
 
     return {
-      db,currentUser,page,globalMsg,globalMsgType,
+      db,currentUser,page,globalMsg,globalMsgType,save,
       loginForm,loginErr,doLogin,logout,
       can,nav,roleLabel,PROBLEM_TYPES,ROLES,ROLE_COLORS,DEST_COLORS,permTable,
       getPTInfo,getPTColor,getDestLabel,
-      r1,r1f,lastReception,onR1Customer,addReception,filteredReceptions,printLabel,
+      r1,r1f,lastReception,addReception,filteredReceptions,printLabel,
+      r1CustomerSearch,showR1CustomerSuggestions,r1CustomerSuggestions,onR1CustomerSearch,hideR1CustomerSuggestions,selectR1Customer,
+      r1fCustomerSearch,showR1fCustomerSuggestions,r1fCustomerSuggestions,onR1fCustomerSearch,hideR1fCustomerSuggestions,selectR1fCustomer,clearR1fCustomer,
       inv,invItem,invCustomers,invSequences,invCustomer,invItems,invPendingItems,editInvId,editInvForm,
       onInvCustomer,addInvItem,receiptDateOf,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,finishInventory,
-      aud,audCustomers,audSequences,auditItems,onAudCustomer,onProblemSelect,finishAudit,restoreItem,
+      invCustomerSearch,showInvCustomerSuggestions,invCustomerSuggestions,onInvCustomerSearch,hideInvCustomerSuggestions,selectInvCustomer,
+      aud,audCustomers,audSequences,auditItems,onAudCustomer,onProblemSelect,restoreItem,
       dq,dqCustomers,dqSequences,decisionItems,onDQCustomer,approveDecision,rejectDecision,
       wf,wfSequences,filteredWorking,editWId,editWForm,onWFCustomer,startWEdit,saveWEdit,
+      wfCustomerSearch,showWfCustomerSuggestions,wfCustomerSuggestions,onWfCustomerSearch,hideWfCustomerSuggestions,selectWfCustomer,clearWfCustomer,
       dmf,dmfSequences,filteredDamaged,editDId,editDForm,onDMFCustomer,startDEdit,saveDEdit,
+      dmfCustomerSearch,showDmfCustomerSuggestions,dmfCustomerSuggestions,onDmfCustomerSearch,hideDmfCustomerSuggestions,selectDmfCustomer,clearDmfCustomer,
       crf,crfSequences,filteredCR,onCRFCustomer,
+      crfCustomerSearch,showCrfCustomerSuggestions,crfCustomerSuggestions,onCrfCustomerSearch,hideCrfCustomerSuggestions,selectCrfCustomer,clearCrfCustomer,
       pf,pfSequences,filteredPending,pendingTransferItem,ptf,onPFCustomer,openPendingTransfer,doPendingTransfer,
       newCust,editCustId,editCustForm,addCustomer,startCustEdit,saveCustEdit,importCustomers,importResult,
       itemDbSearch,filteredItemDb,itemImportResult,newItemDb,editItemDbId,editItemDbForm,
