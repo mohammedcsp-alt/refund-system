@@ -340,7 +340,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         <div class="fgrid">
           <div class="fg">
             <label>باركود (امسح أو أدخل يدوياً)</label>
-            <input v-model="invItem.barcode" @keyup.enter="addInvItemByBarcode" @input="onBarcodeInput" placeholder="امسح أو اكتب الباركود ثم Enter..." ref="barcodeInput">
+            <input v-model="invItem.barcode" @keyup.enter="onBarcodeScanEnter" @input="onBarcodeInput" placeholder="امسح أو اكتب الباركود ثم Enter..." ref="barcodeInput">
             <span v-if="barcodeMatch" style="font-size:.75rem;color:var(--green);margin-top:2px">✅ موجود في قاعدة البيانات: {{barcodeMatch}}</span>
             <span v-if="invItem.barcode && !barcodeMatch && db.item_database.length>0" style="font-size:.75rem;color:var(--orange);margin-top:2px">⚠️ غير موجود في قاعدة البيانات</span>
           </div>
@@ -353,7 +353,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
               </div>
             </div>
           </div>
-          <div class="fg"><label>الكمية *</label><input type="number" min="1" v-model.number="invItem.qty"></div>
+          <div class="fg"><label>الكمية *</label><input type="number" min="1" v-model.number="invItem.qty" @keyup.enter="addInvItemByBarcode" ref="qtyInput"></div>
           <div class="fg"><label>ملاحظة</label>
             <select v-model="invItem.note">
               <option value="">-- اختر --</option>
@@ -364,7 +364,7 @@ tfoot tr{background:#f5f9ff;font-weight:700}
         </div>
         <div class="gap" style="margin-top:12px">
           <button class="btn btn-primary" @click="addInvItem">➕ إضافة</button>
-          <span style="font-size:.8rem;color:var(--grey);align-self:center">أو اضغط Enter بعد إدخال الباركود</span>
+          <span style="font-size:.8rem;color:var(--grey);align-self:center">امسح الباركود، اضغط Enter، عدّل الكمية، ثم اضغط Enter لإضافة العنصر</span>
         </div>
       </div>
 
@@ -977,41 +977,53 @@ const KEY = 'rs_db';
 const TODAY = () => new Date().toISOString().slice(0,10);
 
 const PROBLEM_TYPES = [
-  {value:'warranty_working_after_inspection',label:'داخل الضمان/ شغال بعد الفحص',dest:'working',auto:true},
-  {value:'warranty_writing_error',label:'داخل الضمان/ خطا كتابة',dest:'working',auto:true},
-  {value:'warranty_high_price',label:'داخل الضمان/ سعر مرتفع',dest:'working',auto:true},
-  {value:'warranty_prep_error',label:'داخل الضمان/ خطا تجهيز و جرد',dest:'working',auto:true},
-  {value:'warranty_factory_defect',label:'داخل الضمان/ تالف او خلل مصنعي',dest:'damaged',auto:true},
-  {value:'not_ours',label:'ليست لنا',dest:'customer_return',auto:true},
-  {value:'out_warranty_working',label:'خارج الضمان/ شغال',dests:['working','customer_return','damaged'],auto:false},
-  {value:'out_warranty_broken',label:'خارج الضمان/ كسر',dests:['damaged','customer_return'],auto:false},
-  {value:'broken_connector',label:'كونيكتر مكسور',dests:['damaged','customer_return'],auto:false},
-  {value:'out_warranty_damaged',label:'خارج الضمان/ تالف',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'out_warranty_used',label:'خارج الضمان/ مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'out_warranty_expired',label:'خارج الضمان/ منتهي الصالحية',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'out_warranty_factory_fault',label:'خارج الضمان/ عطل مصنعي',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'expired_working_used',label:'منهي الصلاحية + شغال+مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'expired_broken_used',label:'منتهي الصلاحية + كسر+مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'expired_off_used',label:'منتهي الصلاحية + طافي+مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'expired_touch_used',label:'منتهي الصلاحية + لمس+مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'used_line',label:'مستخدم + خط',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'used_flicker',label:'مستخدم + ترمش',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'used_tape_cut',label:'مستخدم + شريط مقطوع',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'used_tape_hit',label:'مستخدم + شريط مضروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'expired_line',label:'منتهي الصلاحية + خط',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'expired_tape_cut',label:'منتهي الصلاحية + شريط مقطوع',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'expired_connector_broken',label:'منتهي الصلاحية + كسر كونكتر',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'used_connector',label:'مستخدم + كونكتر',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'screen_video_required',label:'مطلوب فديو للشاشة',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'tape_hit',label:'شريط مضروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'pull_error_used',label:'خطا في الشد مستخدمة',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'update',label:'تحديث',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'writing_error',label:'خطا كتابه',dest:'working',auto:true},
+  {value:'high_price',label:'سعر مرتفع',dest:'working',auto:true},
+  {value:'prep_inventory_error',label:'خطا تجهيز وجرد',dest:'working',auto:true},
+  {value:'factory_defect',label:'خلل مصنعي',dest:'damaged',auto:true},
   {value:'old_purchase',label:'شراء قديم',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'open_error_used',label:'خطا في الفتح مستخدمة',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'no_details_no_group_reply',label:'بدون تفاصيل و لم يرد الرد في الكروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'not_sold_to_customer',label:'غير مباع للزبون',dests:['damaged','customer_return'],auto:false,needsNote:true},
-  {value:'return_damaged',label:'راجع تالف',dest:'damaged',auto:true},
-  {value:'pending',label:'معلق',dest:'pending',auto:true},
+  {value:'not_sold_to_customer',label:'غير مباع الى الزبون',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'pending_inspection',label:'معلق فحص',dest:'pending',auto:true},
+  {value:'no_details_no_group_reply',label:'بدون تفاصيل ولم يتم الرد في الكروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'customer_claims_quantity',label:'الزبون يكول عندي كميه',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_working',label:'منتهي الصلاحيه + مستخدم+ شغال',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_broken',label:'منتهي الصلاحيه + مستخدم+ كسر',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_off',label:'منتهي الصلاحيه + مستخدم+ طافي',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_touch',label:'منتهي الصلاحيه + مستخدم+ لمس',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_flicker',label:'منتهي الصلاحيه +مستخدم+ترمش',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_tape_cut',label:'منتهي الصلاحيه +مستخدم+شريط مقطوع',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_connector_broken',label:'منتهي الصلاحيه +مستخدم+كونكتر مكسور',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_atarmash',label:'منتهي الصلاحيه +مستخدم+اترمش',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_tape_hit',label:'منتهي الصلاحيه +مستخدم+شريط مضروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_used_update',label:'منتهي الصلاحيه +مستخدم+تحديث',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_working',label:'منتهي الصلاحيه+شغال',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_broken',label:'منتهي الصلاحيه+كسر',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_off',label:'منتهي الصلاحيه+طافي',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_touch',label:'منتهي الصلاحيه+لمس',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_atarmash',label:'منتهي الصلاحيه+اترمش',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_tape_cut',label:'منتهي الصلاحيه+شريط مقطوع',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_connector_broken',label:'منتهي الصلاحيه+كونكتر مكسور',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_tape_hit',label:'منتهي الصلاحيه+شريط مضروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired_update',label:'منتهي الصلاحيه+تحديث',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'warranty_working_after_inspection',label:'شغال بعد الفحص',dest:'working',auto:true},
+  {value:'not_ours',label:'ليست لنا',dest:'customer_return',auto:true},
+  {value:'broken',label:'كسر',dests:['damaged','customer_return'],auto:false},
+  {value:'broken_connector',label:'كونكتر مكسور',dests:['damaged','customer_return'],auto:false},
+  {value:'used_touch',label:'مستخدم+لمس',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_working',label:'مستخدم+شغال',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_broken',label:'مستخدم+كسر',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_off',label:'مستخدم+طافي',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_atarmash',label:'مستخدم+اترمش',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_connector_broken',label:'مستخدم+كونكتر مكسور',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_tape_cut',label:'مستخدم+شريط مقطوع',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_tape_hit',label:'مستخدم+شريط مضروب',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_malfunction',label:'مستخدم+تخربط',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'expired',label:'منتهي الصلاحيه',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'screen_video_required',label:'مطلوب فيديو للشاشه',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'pull_error_used',label:'خطا في الشد مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'open_error_used',label:'خطا في الفتح مستخدم',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'used_update',label:'مستخدم+تحديث',dests:['damaged','customer_return'],auto:false,needsNote:true},
+  {value:'update',label:'تحديث',dests:['damaged','customer_return'],auto:false,needsNote:true},
 ];
 
 const ROLES = [
@@ -1056,6 +1068,28 @@ function initDB() {
 function saveDB(db) { localStorage.setItem(KEY, JSON.stringify(db)); }
 function nextId(db, table) { db.counters[table] = (db.counters[table]||0)+1; return db.counters[table]; }
 
+// Reference/master tables (item_database, customers, users) are edited independently on
+// multiple PCs. A plain last-write-wins overwrite of the whole db object would let one PC's
+// stale/empty copy erase entries another PC just added. Merge these tables by their natural
+// key instead of blindly replacing them.
+const MASTER_TABLES = { item_database: x=>String(x.barcode||'').trim().toLowerCase(), customers: x=>String(x.customer_code||'').trim().toLowerCase(), users: x=>String(x.username||'').trim().toLowerCase() };
+function mergeByKey(baseArr, overlayArr, keyFn) {
+  const map = new Map();
+  (baseArr||[]).forEach(x => map.set(keyFn(x), x));
+  (overlayArr||[]).forEach(x => { const k = keyFn(x); if (k) map.set(k, x); });
+  return Array.from(map.values());
+}
+function mergeMasterTables(base, overlay) {
+  const merged = { ...base };
+  Object.keys(MASTER_TABLES).forEach(table => {
+    merged[table] = mergeByKey(base[table], overlay[table], MASTER_TABLES[table]);
+    const maxId = merged[table].reduce((m,x)=>Math.max(m, x.id||0), 0);
+    merged.counters = merged.counters || {};
+    merged.counters[table] = Math.max(merged.counters[table]||0, base.counters?.[table]||0, overlay.counters?.[table]||0, maxId);
+  });
+  return merged;
+}
+
 const SYNC_URL = '/api/db';
 async function fetchServerDB(timeoutMs = 1500) {
   try {
@@ -1071,7 +1105,7 @@ async function fetchServerDB(timeoutMs = 1500) {
 (async () => {
 const local = initDB();
 const server = await fetchServerDB();
-const seed = (server && server.data) ? server.data : local;
+const seed = (server && server.data) ? mergeMasterTables(server.data, local) : local;
 let lastSyncedAt = (server && server.data) ? server.updated_at : 0;
 if (server && server.data) saveDB(seed);
 
@@ -1090,26 +1124,40 @@ createApp({
     }
     function save() {
       saveDB(db);
-      fetch(SYNC_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: db })
-      }).then(r=>r.ok?r.json():null)
+      fetchServerDB(1000).then(server => {
+        const payload = JSON.parse(JSON.stringify(db)); // local db is authoritative for everything just edited
+        if (server && server.data) {
+          Object.keys(MASTER_TABLES).forEach(t => {
+            payload[t] = mergeByKey(server.data[t], db[t], MASTER_TABLES[t]);
+            const maxId = payload[t].reduce((m,x)=>Math.max(m, x.id||0), 0);
+            payload.counters[t] = Math.max(payload.counters[t]||0, server.data.counters?.[t]||0, maxId);
+            db[t] = payload[t]; db.counters[t] = payload.counters[t];
+          });
+        }
+        return fetch(SYNC_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: payload })
+        });
+      }).then(r=>r&&r.ok?r.json():null)
         .then(j=>{ if (j) lastSyncedAt = j.updated_at; })
         .catch(()=>{});
     }
     onMounted(()=>{
+      save(); // reconcile item_database/customers/users with the server right after load
       setInterval(async ()=>{
         const s = await fetchServerDB();
         if (s && s.data && s.updated_at > lastSyncedAt) {
+          const merged = mergeMasterTables(s.data, db);
           Object.assign(db, s.data);
+          Object.keys(MASTER_TABLES).forEach(t => { db[t] = merged[t]; db.counters[t] = merged.counters[t]; });
           saveDB(db);
           lastSyncedAt = s.updated_at;
         }
       }, 5000);
     });
     function can(...roles) { return currentUser.value && currentUser.value.roles && roles.some(r=>currentUser.value.roles.includes(r)); }
-    function nav(p) { page.value = p; }
+    function nav(p) { page.value = p; if(p==='inventory') focusBarcodeInput(); }
     function roleLabel(r) { return ROLES.find(x=>x.value===r)?.label||r; }
     function getPTInfo(v) { return PROBLEM_TYPES.find(p=>p.value===v); }
     function getPTColor(v) { const pt=getPTInfo(v); if(!pt) return 'b-grey'; if(pt.dest==='working') return 'b-green'; if(pt.dest==='damaged') return 'b-red'; if(pt.dest==='customer_return') return 'b-blue'; return 'b-orange'; }
@@ -1192,6 +1240,9 @@ createApp({
     // ─── INVENTORY ───
     const inv = reactive({customer_code:'',list_sequence:'',inspector:''});
     const invItem = reactive({item_name:'',qty:1,barcode:'',note:''});
+    const barcodeInput = ref(null);
+    const qtyInput = ref(null);
+    function focusBarcodeInput(){ nextTick(()=>barcodeInput.value?.focus()); }
     const editInvId = ref(null); const editInvForm = reactive({});
     const invCustomers = computed(()=>{
       const map=new Map();
@@ -1266,13 +1317,22 @@ createApp({
       if (name) invItem.item_name = name;
       else invItem.item_name = '';   // clear stale name when barcode changes
     }
+    function onBarcodeScanEnter() {
+      // Scanner's Enter only finalizes the barcode lookup and moves to qty entry -
+      // it must NOT add the item yet, so the operator can set the quantity first.
+      invItem.barcode = cleanBarcode(invItem.barcode);
+      const name = lookupBarcode(invItem.barcode);
+      if (name) invItem.item_name = name;
+      nextTick(()=>{ qtyInput.value?.focus(); qtyInput.value?.select(); });
+    }
     function addInvItemByBarcode() {
-      // @keyup.enter: barcode is fully captured in invItem.barcode by now
+      // @keyup.enter on the qty field: barcode/item_name are already resolved by now
       invItem.barcode = cleanBarcode(invItem.barcode);
       const name = lookupBarcode(invItem.barcode);
       if (name) invItem.item_name = name;
       addInvItem();
       barcodeMatch.value = '';
+      focusBarcodeInput();
     }
     const showItemNameSuggestions = ref(false);
     const itemNameSuggestions = computed(()=>{
@@ -1721,8 +1781,8 @@ createApp({
       r1,r1f,lastReception,addReception,filteredReceptions,printLabel,
       r1CustomerSearch,showR1CustomerSuggestions,r1CustomerSuggestions,onR1CustomerSearch,hideR1CustomerSuggestions,selectR1Customer,
       r1fCustomerSearch,showR1fCustomerSuggestions,r1fCustomerSuggestions,onR1fCustomerSearch,hideR1fCustomerSuggestions,selectR1fCustomer,clearR1fCustomer,
-      inv,invItem,invCustomers,invSequences,invCustomer,invItems,invPendingItems,editInvId,editInvForm,
-      onInvCustomer,addInvItem,receiptDateOf,addInvItemByBarcode,startInvEdit,saveInvEdit,delInvItem,sendToAudit,finishInventory,
+      inv,invItem,invCustomers,invSequences,invCustomer,invItems,invPendingItems,editInvId,editInvForm,barcodeInput,
+      onInvCustomer,addInvItem,receiptDateOf,addInvItemByBarcode,onBarcodeScanEnter,qtyInput,startInvEdit,saveInvEdit,delInvItem,sendToAudit,finishInventory,
       invCustomerSearch,showInvCustomerSuggestions,invCustomerSuggestions,onInvCustomerSearch,hideInvCustomerSuggestions,selectInvCustomer,
       aud,audCustomers,audSequences,auditItems,onAudCustomer,onProblemSelect,restoreItem,
       dq,dqCustomers,dqSequences,decisionItems,onDQCustomer,approveDecision,rejectDecision,
